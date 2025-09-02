@@ -31,7 +31,7 @@ export default function JsxImportForm() {
   const createMutation = useMutation({
     mutationFn: api.createComponent,
     onSuccess: (data) => {
-      router.push(`/preview/${data.component.id}`);
+      router.push(`/preview/${data.component.componentId}`);
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : "Something went wrong";

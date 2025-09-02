@@ -7,8 +7,8 @@ import Link from "next/link";
 async function getData(id: string) {
   const comp = await getComponent(id);
   if (!comp) return null;
-  return { id: comp.id, tree: comp.tree, name: comp.name } as {
-    id: string;
+  return { componentId: comp.componentId, tree: comp.tree, name: comp.name } as {
+    componentId: string;
     tree: ComponentTree;
     name?: string;
   };
@@ -27,7 +27,9 @@ export default async function PreviewPage({ params }: { params: { id: string } }
           </div>
           <div>
             <h1 className="text-xl font-semibold">Visual Editor</h1>
-            <p className="text-xs text-muted-foreground">Editing: {comp.name ?? comp.id}</p>
+            <p className="text-xs text-muted-foreground">
+              Editing: {comp.name ?? comp.componentId}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -39,7 +41,7 @@ export default async function PreviewPage({ params }: { params: { id: string } }
       </header>
 
       {/* Client wrapper for editing */}
-      <ClientEditor id={comp.id} initialTree={comp.tree} />
+      <ClientEditor id={comp.componentId} initialTree={comp.tree} />
     </div>
   );
 }

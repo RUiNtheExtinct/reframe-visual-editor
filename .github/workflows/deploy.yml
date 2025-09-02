@@ -2,7 +2,7 @@ name: CI & Deploy
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
@@ -22,10 +22,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Create .env from GitHub Secrets
+        run: |
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env
+          echo "NEXT_PUBLIC_BASE_URL=${{ secrets.NEXT_PUBLIC_BASE_URL }}" >> .env
+        shell: bash
 
       - name: Lint
         run: pnpm lint
@@ -41,11 +47,13 @@ jobs:
 
       - name: Build Project Artifacts
         run: pnpm dlx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DRIZZLE_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NEXT_PUBLIC_BASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL }}
 
       - name: Deploy Project Artifacts to Vercel
         run: pnpm dlx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-

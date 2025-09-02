@@ -2,7 +2,7 @@
 
 import type { ComponentTree, EditorNode, ElementNode, TextNode } from "@/lib/editorTypes";
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type WebsiteEditorProps = {
   tree: ComponentTree;
@@ -28,10 +28,16 @@ export default function WebsiteEditor({
 
   useEffect(() => setCurrentTree(tree), [tree]);
 
+  const lastSerializedRef = useRef<string | null>(null);
   useEffect(() => {
     onChange?.(currentTree);
     if (!autoSave || !onSave) return;
-    const id = setTimeout(() => onSave(JSON.stringify(currentTree)), 600);
+    const serialized = JSON.stringify(currentTree);
+    if (serialized === lastSerializedRef.current) return; // no changes
+    const id = setTimeout(() => {
+      lastSerializedRef.current = serialized;
+      onSave(serialized);
+    }, 600);
     return () => clearTimeout(id);
   }, [currentTree, autoSave, onSave, onChange]);
 
@@ -41,9 +47,30 @@ export default function WebsiteEditor({
     }));
   }, []);
 
+  const generateId = () =>
+    typeof crypto !== "undefined" && (crypto as any).randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+
+  const handleDelete = useCallback(() => {
+    if (!selectedId) return;
+    setCurrentTree((prev) => ({ root: deleteNode(prev.root, selectedId) }));
+    setSelectedId(null);
+  }, [selectedId]);
+
+  const handleDuplicate = useCallback(() => {
+    if (!selectedId) return;
+    setCurrentTree((prev) => ({ root: duplicateNode(prev.root, selectedId, generateId) }));
+  }, [selectedId]);
+
+  const handleAddText = useCallback(() => {
+    if (!selectedId) return;
+    setCurrentTree((prev) => ({ root: addSiblingText(prev.root, selectedId, generateId) }));
+  }, [selectedId]);
+
   return (
-    <div className="grid grid-cols-12 gap-6 h-[calc(100dvh-140px)]">
-      <div className="col-span-8 rounded-xl border bg-card p-3 overflow-auto transition-shadow duration-200 hover:shadow-lg">
+    <div className="max-w-6xl mx-auto grid grid-cols-12 gap-6 h-[calc(100dvh-140px)] px-1">
+      <div className="col-span-12 lg:col-span-8 rounded-xl border bg-card p-3 overflow-auto transition-shadow duration-200 hover:shadow-lg">
         <div className="flex items-center justify-between px-1 py-2">
           <h2 className="text-sm font-medium text-muted-foreground">{title ?? "Preview"}</h2>
           <div className="text-xs text-muted-foreground">Click elements to edit</div>
@@ -55,7 +82,7 @@ export default function WebsiteEditor({
           {renderNode(currentTree.root, selectedId, setSelectedId)}
         </motion.div>
       </div>
-      <div className="col-span-4 rounded-xl border bg-card p-4 transition-all duration-200">
+      <div className="col-span-12 lg:col-span-4 rounded-xl border bg-card p-4 transition-all duration-200 lg:sticky lg:top-6 h-fit">
         <h3 className="text-base font-semibold mb-4">Inspector</h3>
         <AnimatePresence mode="wait" initial={false}>
           {selectedNode ? (
@@ -83,6 +110,28 @@ export default function WebsiteEditor({
             </motion.p>
           )}
         </AnimatePresence>
+        {selectedNode && (
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <button
+              className="border rounded-md px-2 py-1 text-sm hover:bg-accent"
+              onClick={handleAddText}
+            >
+              + Text
+            </button>
+            <button
+              className="border rounded-md px-2 py-1 text-sm hover:bg-accent"
+              onClick={handleDuplicate}
+            >
+              Duplicate
+            </button>
+            <button
+              className="border rounded-md px-2 py-1 text-sm hover:bg-accent"
+              onClick={handleDelete}
+            >
+              Delete
+            </button>
+          </div>
+        )}
         {onSave && (
           <motion.button
             className="mt-6 inline-flex items-center justify-center rounded-md bg-foreground text-background py-2 px-3 text-sm font-medium"
@@ -211,6 +260,23 @@ function CommonStyleControls({
         />
       </div>
       <div>
+        <label className="block text-xs mb-1 text-muted-foreground">Padding (px)</label>
+        <input
+          type="number"
+          className="w-full rounded-md border px-3 py-2 bg-background"
+          value={Number((style as any).padding ?? 0)}
+          onChange={(e) =>
+            onChange({
+              ...node,
+              style: {
+                ...(style as any),
+                padding: Number(e.target.value || 0),
+              } as unknown as ElementNode["style"],
+            })
+          }
+        />
+      </div>
+      <div>
         <label className="block text-xs mb-1 text-muted-foreground">Font Size (px)</label>
         <input
           type="number"
@@ -310,4 +376,59 @@ function updateNodeRecursive(
     } as ElementNode;
   }
   return node;
+}
+
+function deleteNode(node: EditorNode, id: string): EditorNode {
+  if (node.type === "element") {
+    const filtered = node.children.filter((c) => c.id !== id).map((c) => deleteNode(c, id));
+    return { ...(node as ElementNode), children: filtered } as ElementNode;
+  }
+  return node;
+}
+
+function cloneNodeDeep(node: EditorNode, idGen: () => string): EditorNode {
+  if (node.type === "text") {
+    return { ...node, id: idGen() } as TextNode;
+  }
+  return {
+    ...(node as ElementNode),
+    id: idGen(),
+    children: (node as ElementNode).children.map((c) => cloneNodeDeep(c, idGen)),
+  } as ElementNode;
+}
+
+function duplicateNode(root: EditorNode, targetId: string, idGen: () => string): EditorNode {
+  if (root.type !== "element") return root;
+  const stack: ElementNode[] = [root as ElementNode];
+  while (stack.length) {
+    const cur = stack.pop() as ElementNode;
+    const idx = cur.children.findIndex((c) => c.id === targetId);
+    if (idx >= 0) {
+      const dup = cloneNodeDeep(cur.children[idx], idGen);
+      const next = [...cur.children];
+      next.splice(idx + 1, 0, dup);
+      cur.children = next;
+      return { ...(root as ElementNode) } as ElementNode;
+    }
+    for (const ch of cur.children) if (ch.type === "element") stack.push(ch as ElementNode);
+  }
+  return root;
+}
+
+function addSiblingText(root: EditorNode, targetId: string, idGen: () => string): EditorNode {
+  if (root.type !== "element") return root;
+  const stack: ElementNode[] = [root as ElementNode];
+  while (stack.length) {
+    const cur = stack.pop() as ElementNode;
+    const idx = cur.children.findIndex((c) => c.id === targetId);
+    if (idx >= 0) {
+      const text: TextNode = { type: "text", id: idGen(), text: "New text" };
+      const next = [...cur.children];
+      next.splice(idx + 1, 0, text);
+      cur.children = next;
+      return { ...(root as ElementNode) } as ElementNode;
+    }
+    for (const ch of cur.children) if (ch.type === "element") stack.push(ch as ElementNode);
+  }
+  return root;
 }

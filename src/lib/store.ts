@@ -1,67 +1,87 @@
-import { promises as fs } from "fs";
-import path from "path";
+import { getDb } from "@/db";
+import { components } from "@/db/schema";
+import { desc, eq } from "drizzle-orm";
 import type { StoredComponent } from "./editorTypes";
 
-const DB_FILE = path.join(process.cwd(), "components.json");
-
-type DBShape = {
-  components: Record<string, StoredComponent>;
-};
-
-async function readDb(): Promise<DBShape> {
-  try {
-    const data = await fs.readFile(DB_FILE, "utf8");
-    const parsed = JSON.parse(data) as DBShape;
-    if (!parsed.components) return { components: {} };
-    return parsed;
-  } catch (err) {
-    console.error(err);
-    return { components: {} };
-  }
-}
-
-async function writeDb(db: DBShape): Promise<void> {
-  await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), "utf8");
-}
-
 export async function createComponent(
-  payload: Omit<StoredComponent, "id" | "createdAt" | "updatedAt"> & { id?: string }
+  payload: Omit<StoredComponent, "componentId" | "createdAt" | "updatedAt"> & {
+    componentId?: string;
+  }
 ): Promise<StoredComponent> {
-  const db = await readDb();
-  const id = payload.id ?? crypto.randomUUID();
+  const drizzle = getDb();
+  if (!drizzle) throw new Error("Database not configured. Set DATABASE_URL.");
+  const componentId = payload.componentId ?? crypto.randomUUID();
   const now = new Date().toISOString();
   const comp: StoredComponent = {
-    id,
+    componentId,
     name: payload.name,
     source: payload.source,
     tree: payload.tree,
     createdAt: now,
     updatedAt: now,
   };
-  db.components[id] = comp;
-  await writeDb(db);
+  await drizzle
+    .insert(components)
+    .values({
+      componentId,
+      name: comp.name ?? (null as any),
+      source: comp.source ?? (null as any),
+      tree: comp.tree as any,
+    });
   return comp;
 }
 
-export async function getComponent(id: string): Promise<StoredComponent | null> {
-  const db = await readDb();
-  return db.components[id] ?? null;
+export async function getComponent(componentId: string): Promise<StoredComponent | null> {
+  const drizzle = getDb();
+  if (!drizzle) throw new Error("Database not configured. Set DATABASE_URL.");
+  const rows = await drizzle
+    .select()
+    .from(components)
+    .where(eq(components.componentId, componentId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    componentId: row.componentId,
+    name: row.name ?? undefined,
+    source: row.source ?? undefined,
+    tree: row.tree as any,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 export async function updateComponent(
-  id: string,
+  componentId: string,
   partial: Partial<Pick<StoredComponent, "name" | "source" | "tree">>
 ): Promise<StoredComponent | null> {
-  const db = await readDb();
-  const existing = db.components[id];
-  if (!existing) return null;
-  const updated: StoredComponent = { ...existing, ...partial, updatedAt: new Date().toISOString() };
-  db.components[id] = updated;
-  await writeDb(db);
+  const drizzle = getDb();
+  if (!drizzle) throw new Error("Database not configured. Set DATABASE_URL.");
+  const current = await getComponent(componentId);
+  if (!current) return null;
+  const updated: StoredComponent = { ...current, ...partial, updatedAt: new Date().toISOString() };
+  await drizzle
+    .update(components)
+    .set({
+      name: updated.name ?? (null as any),
+      source: updated.source ?? (null as any),
+      tree: updated.tree as any,
+      updatedAt: new Date(updated.updatedAt),
+    })
+    .where(eq(components.componentId, componentId));
   return updated;
 }
 
 export async function listComponents(): Promise<StoredComponent[]> {
-  const db = await readDb();
-  return Object.values(db.components).sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+  const drizzle = getDb();
+  if (!drizzle) throw new Error("Database not configured. Set DATABASE_URL.");
+  const rows = await drizzle.select().from(components).orderBy(desc(components.updatedAt));
+  return rows.map((r) => ({
+    componentId: r.componentId,
+    name: r.name ?? undefined,
+    source: r.source ?? undefined,
+    tree: r.tree as any,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  }));
 }

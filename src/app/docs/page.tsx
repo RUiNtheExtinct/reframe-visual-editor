@@ -1,6 +1,17 @@
+import Image from "next/image";
+
 export default function DocsPage() {
   return (
     <div className="min-h-screen px-6 py-10 sm:px-12 max-w-4xl mx-auto">
+      <div className="relative h-44 w-full mb-8 overflow-hidden rounded-xl border">
+        <Image
+          src="https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=1600&auto=format&fit=crop"
+          alt="team working"
+          fill
+          className="object-cover"
+          priority
+        />
+      </div>
       <h1 className="text-3xl font-bold">Runable Visual Editor — Documentation</h1>
       <p className="mt-2 text-muted-foreground">
         Paste any React component, preview it, and visually edit text and basic styles. Changes
@@ -34,6 +45,23 @@ export default function DocsPage() {
       </section>
 
       <section className="mt-10 space-y-3">
+        <h2 className="text-xl font-semibold">Environment</h2>
+        <p className="text-sm text-muted-foreground">Create a .env with:</p>
+        <pre className="text-xs rounded-md border p-3 bg-muted overflow-auto">{`DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require
+NEXT_PUBLIC_BASE_URL=`}</pre>
+      </section>
+
+      <section className="mt-10 space-y-3">
+        <h2 className="text-xl font-semibold">Database</h2>
+        <p>
+          Schema lives in <code className="px-1 py-0.5 rounded bg-muted">src/db/schema.ts</code>.
+          The app only uses Postgres (Drizzle ORM).
+        </p>
+        <pre className="text-xs rounded-md border p-3 bg-muted overflow-auto">{`pnpm dlx drizzle-kit generate
+pnpm dlx drizzle-kit push`}</pre>
+      </section>
+
+      <section className="mt-10 space-y-3">
         <h2 className="text-xl font-semibold">API</h2>
         <p className="text-sm text-muted-foreground">
           Responses contain the serialized component tree.
@@ -52,6 +80,37 @@ export default function DocsPage() {
             component
           </li>
         </ul>
+      </section>
+
+      <section className="mt-10 space-y-3">
+        <h2 className="text-xl font-semibold">Vercel CLI - secrets for CI</h2>
+        <ol className="list-decimal ml-5 space-y-2 text-sm">
+          <li>
+            <code className="px-1 py-0.5 rounded bg-muted">pnpm dlx vercel login</code> then{" "}
+            <code className="px-1 py-0.5 rounded bg-muted">pnpm dlx vercel whoami</code>
+          </li>
+          <li>
+            Link the project to generate{" "}
+            <code className="px-1 py-0.5 rounded bg-muted">.vercel/project.json</code>:
+            <pre className="text-xs rounded-md border p-3 bg-muted overflow-auto">{`pnpm dlx vercel link
+cat .vercel/project.json # includes orgId and projectId`}</pre>
+          </li>
+          <li>
+            Generate a token at{" "}
+            <a
+              className="underline"
+              href="https://vercel.com/account/tokens"
+              target="_blank"
+              rel="noreferrer"
+            >
+              vercel.com/account/tokens
+            </a>
+            . Save <code className="px-1 py-0.5 rounded bg-muted">VERCEL_TOKEN</code>,{" "}
+            <code className="px-1 py-0.5 rounded bg-muted">VERCEL_ORG_ID</code>,{" "}
+            <code className="px-1 py-0.5 rounded bg-muted">VERCEL_PROJECT_ID</code> in GitHub
+            secrets.
+          </li>
+        </ol>
       </section>
 
       <section className="mt-10 space-y-3">
