@@ -15,6 +15,7 @@ import { parseJsxToTree, serializeTreeToSource } from "@/lib/serializer";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import PreviewSurface from "./PreviewSurface";
 
 type WebsiteEditorProps = {
   tree: ComponentTree;
@@ -41,6 +42,8 @@ export default function WebsiteEditor({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"design" | "code">("design");
   const [code, setCode] = useState<string>(serializeTreeToSource(tree, name));
+  const lastChangeSourceRef = useRef<"ui" | "code" | null>(null);
+  const [codeInstanceKey, setCodeInstanceKey] = useState(0);
   const selectedNode = useMemo(
     () => (selectedId ? findNode(currentTree.root, selectedId) : null),
     [currentTree, selectedId]
@@ -68,12 +71,21 @@ export default function WebsiteEditor({
       try {
         const next = await parseJsxToTree(code);
         setCurrentTree(next);
+        lastChangeSourceRef.current = "code";
       } catch {
         // Ignore parse errors silently; the import function already handles toast on failure
       }
     }, 500);
     return () => clearTimeout(id);
   }, [code, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "code" && lastChangeSourceRef.current === "ui") {
+      setCode(serializeTreeToSource(currentTree, name));
+      setCodeInstanceKey((k) => k + 1);
+      lastChangeSourceRef.current = null;
+    }
+  }, [currentTree, name, activeTab]);
 
   const lastSerializedRef = useRef<string | null>(null);
   useEffect(() => {
@@ -89,6 +101,7 @@ export default function WebsiteEditor({
   }, [currentTree, autoSave, onSave, onChange]);
 
   const updateNode = useCallback((id: string, updater: (node: EditorNode) => EditorNode) => {
+    lastChangeSourceRef.current = "ui";
     setCurrentTree((prev) => ({
       root: updateNodeRecursive(prev.root, id, updater),
     }));
@@ -101,6 +114,7 @@ export default function WebsiteEditor({
 
   const handleDelete = useCallback(() => {
     if (!selectedId) return;
+    lastChangeSourceRef.current = "ui";
     setCurrentTree((prev) => ({ root: deleteNode(prev.root, selectedId) }));
     setSelectedId(null);
     toast.success("Deleted element");
@@ -108,12 +122,14 @@ export default function WebsiteEditor({
 
   const handleDuplicate = useCallback(() => {
     if (!selectedId) return;
+    lastChangeSourceRef.current = "ui";
     setCurrentTree((prev) => ({ root: duplicateNode(prev.root, selectedId, generateId) }));
     toast.success("Duplicated element");
   }, [selectedId]);
 
   const handleAddText = useCallback(() => {
     if (!selectedId) return;
+    lastChangeSourceRef.current = "ui";
     setCurrentTree((prev) => ({ root: addSiblingText(prev.root, selectedId, generateId) }));
     toast.success("Added text element");
   }, [selectedId]);
@@ -155,22 +171,25 @@ export default function WebsiteEditor({
             </Button>
           </div>
         </div>
-        <motion.div className="rounded-lg border bg-background p-0 transition-colors" layout>
+        <div className="rounded-lg border bg-background p-0 transition-colors">
           {activeTab === "design" ? (
-            <div className="p-6 min-h-[520px]">
-              <div className="text-xs text-muted-foreground mb-2">Click elements to edit</div>
-              {renderNode(currentTree.root, selectedId, setSelectedId)}
-            </div>
+            <PreviewSurface>
+              <div className="p-6 min-h-[520px]">
+                <div className="text-xs text-muted-foreground mb-2">Click elements to edit</div>
+                {renderNode(currentTree.root, selectedId, setSelectedId)}
+              </div>
+            </PreviewSurface>
           ) : (
             <div className="p-2">
               <CodeEditor
                 value={code}
                 onChange={setCode}
                 fileName={`${(name || "Component").replace(/\s+/g, "")}.tsx`}
+                instanceKey={codeInstanceKey}
               />
             </div>
           )}
-        </motion.div>
+        </div>
       </div>
       <div className="col-span-12 lg:col-span-4 rounded-xl border bg-card p-4 transition-all duration-200 lg:sticky lg:top-6 h-fit">
         <h3 className="text-base font-semibold mb-4">Inspector</h3>

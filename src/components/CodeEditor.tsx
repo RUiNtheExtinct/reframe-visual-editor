@@ -9,6 +9,7 @@ type Props = {
   onChange: (val: string) => void;
   fileName?: string; // e.g. Component.tsx
   maxHeight?: number;
+  instanceKey?: string | number;
 };
 
 const Monaco = dynamic(async () => (await import("@monaco-editor/react")).default, {
@@ -27,6 +28,7 @@ export default function CodeEditor({
   onChange,
   fileName = "Component.tsx",
   maxHeight = 520,
+  instanceKey,
 }: Props) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -52,6 +54,7 @@ export default function CodeEditor({
         {fileName}
       </div>
       <Monaco
+        key={instanceKey}
         height={`${maxHeight}px`}
         defaultLanguage={language}
         path={fileName}
@@ -89,6 +92,7 @@ function configureMonaco(monaco: any) {
     target: monaco.languages.typescript.ScriptTarget.ESNext,
     module: monaco.languages.typescript.ModuleKind.ESNext,
     moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeNext,
+    lib: ["esnext", "dom", "dom.iterable"],
     noEmit: true,
     skipLibCheck: true,
     allowSyntheticDefaultImports: true,
@@ -137,22 +141,41 @@ declare namespace JSX {
 }
 
 function registerEnhancements(editor: any, monaco: any) {
-  // Basic Tailwind-ish className suggestions (lightweight heuristic)
+  // Try to enable Tailwind CSS IntelliSense for Monaco on the fly
+  (async () => {
+    try {
+      const mod: any = await import("monaco-tailwindcss" as any);
+      const init = mod?.init || mod?.default || mod?.initialize || mod?.setup;
+      if (typeof init === "function") {
+        try {
+          init(monaco, editor, {
+            // Keep default config; Tailwind v4 build still applies, this augments editor UX
+          });
+        } catch {
+          // ignore initialization errors
+        }
+        return;
+      }
+    } catch {
+      // fall back to lightweight completion below
+    }
 
-  monaco.languages.registerCompletionItemProvider("typescript", {
-    triggerCharacters: ['"', "'", " ", "-", ":"],
-    provideCompletionItems(model: any, position: any) {
-      const line = model.getLineContent(position.lineNumber);
-      const upto = line.slice(0, position.column - 1);
-      const isInClassName = /className\s*=\s*(\"[^\"]*|\'[^\']*|\{`[^`]*|\{\"[^\"]*)$/.test(upto);
-      if (!isInClassName) return { suggestions: [] };
-      const suggestions = TAILWIND_SNIPPETS.map((label) => ({
-        label,
-        kind: monaco.languages.CompletionItemKind.Keyword,
-        insertText: label,
-        range: undefined,
-      }));
-      return { suggestions };
-    },
-  });
+    // Fallback: lightweight Tailwind-ish className suggestions
+    monaco.languages.registerCompletionItemProvider("typescript", {
+      triggerCharacters: ['"', "'", " ", "-", ":"],
+      provideCompletionItems(model: any, position: any) {
+        const line = model.getLineContent(position.lineNumber);
+        const upto = line.slice(0, position.column - 1);
+        const isInClassName = /className\s*=\s*(\"[^\"]*|\'[^\']*|\{`[^`]*|\{\"[^\"]*)$/.test(upto);
+        if (!isInClassName) return { suggestions: [] };
+        const suggestions = TAILWIND_SNIPPETS.map((label) => ({
+          label,
+          kind: monaco.languages.CompletionItemKind.Keyword,
+          insertText: label,
+          range: undefined,
+        }));
+        return { suggestions };
+      },
+    });
+  })();
 }

@@ -75,6 +75,11 @@ function serializeNode(node: EditorNode, indent: number): string {
   const pad = (n: number) => " ".repeat(n);
   if (node.type === "text") {
     const n = node as TextNode;
+    const hasStyle = n.style && Object.keys(n.style).length > 0;
+    if (hasStyle) {
+      const styleSerialized = serializeStyle(n.style as NonNullable<TextNode["style"]>);
+      return `${pad(indent)}<span style={{ ${styleSerialized} }}>${escapeText(n.text)}</span>`;
+    }
     return `${pad(indent)}${escapeText(n.text)}`;
   }
   const n = node as ElementNode;

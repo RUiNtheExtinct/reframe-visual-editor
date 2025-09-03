@@ -20,7 +20,9 @@ async function getData(id: string) {
 }
 
 export default async function PreviewPage({ params }: { params: { id: string } }) {
-  const comp = await getData(params.id);
+  const { id } = await params;
+
+  const comp = await getData(id);
   if (!comp) return <div className="p-8">Not found</div>;
 
   return (
