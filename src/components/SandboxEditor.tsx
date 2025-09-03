@@ -132,8 +132,14 @@ export default function SandboxEditor({
   useEffect(() => {
     const t = setTimeout(async () => {
       const sourceToSave = injectOverrides(code, overridesRef.current);
-      if (sourceToSave === lastSavedRef.current) return;
-      lastSavedRef.current = sourceToSave;
+      // Include meta (name/description) in the identity to ensure meta-only edits save
+      const saveKey = JSON.stringify({
+        source: sourceToSave,
+        name: name || undefined,
+        description: description || undefined,
+      });
+      if (saveKey === lastSavedRef.current) return;
+      lastSavedRef.current = saveKey;
       let tree: any | undefined;
       try {
         tree = await parseJsxToTree(sourceToSave);
@@ -449,6 +455,7 @@ export default function SandboxEditor({
                   <Button
                     variant="outline"
                     className="inline-flex items-center gap-1"
+                    disabled={true}
                     onClick={() => {
                       const root = shadowRootRef.current;
                       if (!root || !selectedSelector) return;
@@ -504,7 +511,7 @@ export default function SandboxEditor({
       </div>
       <div className="col-span-12 xl:col-span-4 space-y-4">
         <div className="rounded-xl border p-4 bg-card">
-          <h4 className="text-sm font-semibold mb-3 text-red-600 dark:text-red-300">Meta</h4>
+          <h4 className="text-md font-semibold mb-3 text-red-600 dark:text-red-300">Meta</h4>
           <div className="space-y-3">
             <label className="block text-xs text-foreground/70">Name</label>
             <input
@@ -521,7 +528,7 @@ export default function SandboxEditor({
           </div>
         </div>
         <div className="rounded-xl border p-4 bg-card">
-          <h4 className="text-sm font-semibold mb-3 text-red-600 dark:text-red-300">Inspector</h4>
+          <h4 className="text-md font-semibold mb-3 text-red-600 dark:text-red-300">Inspector</h4>
           {selectedSelector ? (
             <div className="space-y-3">
               <div>
