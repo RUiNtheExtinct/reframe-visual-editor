@@ -1,6 +1,7 @@
 "use client";
 
 import { TAILWIND_SNIPPETS } from "@/constants";
+import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 
@@ -32,6 +33,7 @@ export default function CodeEditor({
 }: Props) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  const { resolvedTheme } = useTheme();
 
   const language = useMemo(
     () => (fileName.endsWith(".tsx") ? "typescript" : "javascript"),
@@ -60,7 +62,7 @@ export default function CodeEditor({
         path={fileName}
         value={value}
         onChange={(v) => onChange(v || "")}
-        theme={isDark() ? "vs-dark" : "light"}
+        theme={resolvedTheme === "dark" ? "vs-dark" : "light"}
         beforeMount={(monaco) => configureMonaco(monaco)}
         onMount={(editor, monaco) => registerEnhancements(editor, monaco)}
         options={{
@@ -137,6 +139,17 @@ declare namespace JSX {
   monaco.languages.typescript.typescriptDefaults.addExtraLib(
     reactTypesDts,
     "file:///node_modules/@types/react/index.d.ts"
+  );
+
+  // Provide sandbox global helpers typings
+  const sandboxGlobalsDts = `
+declare const clsx: (...args: any[]) => string;
+declare const cn: (...args: any[]) => string;
+declare function tw(strings: TemplateStringsArray, ...exprs: any[]): string;
+`;
+  monaco.languages.typescript.typescriptDefaults.addExtraLib(
+    sandboxGlobalsDts,
+    "file:///__sandbox_globals__.d.ts"
   );
 }
 
