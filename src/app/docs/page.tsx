@@ -12,7 +12,7 @@ export default function DocsPage() {
           priority
         />
       </div>
-      <h1 className="text-3xl font-bold">Runnable Visual Editor — Documentation</h1>
+      <h1 className="text-3xl font-bold">Reframe — Documentation</h1>
       <p className="mt-2 text-muted-foreground">
         Paste any React component, preview it, and visually edit text and basic styles. Changes
         auto-save to the backend.

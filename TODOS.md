@@ -1,0 +1,6 @@
+- [x] generate logo and update app for this
+- [ ] fix editor for complex react components
+- [ ] add borders as a feature
+- [ ] make the color pickers look better
+- [ ] add support for gradients as well
+- [ ] make key bindings work for the visual editor

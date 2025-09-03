@@ -74,10 +74,14 @@ export async function updateComponent(
   return updated;
 }
 
-export async function listComponents(): Promise<StoredComponent[]> {
+export async function listComponents(num: number = 20): Promise<StoredComponent[]> {
   const drizzle = getDb();
   if (!drizzle) throw new Error("Database not configured. Set DATABASE_URL.");
-  const rows = await drizzle.select().from(components).orderBy(desc(components.updatedAt));
+  const rows = await drizzle
+    .select()
+    .from(components)
+    .orderBy(desc(components.updatedAt))
+    .limit(num);
   return rows.map((r) => ({
     componentId: r.componentId,
     name: r.name ?? undefined,

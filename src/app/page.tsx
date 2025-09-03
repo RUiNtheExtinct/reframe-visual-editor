@@ -4,8 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 
 export default async function Home() {
-  const existing = await listComponents();
-  const top = existing.slice(0, 6);
+  const top = await listComponents(6);
+
   return (
     <div className="min-h-screen px-6 py-10 sm:px-12">
       <main className="mx-auto max-w-6xl">
@@ -14,14 +14,14 @@ export default async function Home() {
           <div className="grid gap-0 md:grid-cols-2">
             <div className="p-8 sm:p-12 flex flex-col justify-center">
               <span className="inline-flex items-center rounded-full bg-accent/15 px-2.5 py-1 text-xs font-medium text-accent-foreground ring-1 ring-accent/30">
-                New — Visual React editor
+                Reframe — Visual React editor
               </span>
               <h1 className="mt-4 text-4xl sm:text-5xl font-bold tracking-tight">
-                Build beautiful UIs by editing actual React.
+                Turn any React component into a live canvas.
               </h1>
               <p className="mt-4 text-base text-muted-foreground">
-                Paste a component, click any element, and tweak copy, colors, and layout. A crisp
-                red primary with subtle green accents keeps focus where it matters.
+                Paste your JSX, select any element, and edit copy, colors, and layout—right on the
+                component. Real React, instant preview, zero setup.
               </p>
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 <Link
@@ -30,14 +30,26 @@ export default async function Home() {
                 >
                   Paste your component
                 </Link>
-                <a
-                  className="text-sm underline decoration-dotted text-muted-foreground hover:text-foreground"
-                  href="https://grapesjs.com/"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Inspired by grapesjs & v0
-                </a>
+                <span className="text-sm text-muted-foreground">
+                  Inspired by{" "}
+                  <a
+                    className="underline decoration-dotted hover:text-foreground"
+                    href="https://grapesjs.com/"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    GrapesJS
+                  </a>{" "}
+                  and{" "}
+                  <a
+                    className="underline decoration-dotted hover:text-foreground"
+                    href="https://v0.dev/"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    v0
+                  </a>
+                </span>
               </div>
             </div>
             <div className="relative h-64 md:h-full min-h-64">
@@ -79,9 +91,12 @@ export default async function Home() {
                   className="group overflow-hidden rounded-xl border bg-card hover:shadow-sm transition-shadow"
                 >
                   <div className="p-4">
-                    <div className="font-medium truncate group-hover:text-foreground/90">
+                    <a
+                      className="font-medium truncate group-hover:text-foreground/90"
+                      href={`/preview/${c.componentId}`}
+                    >
                       {c.name ?? c.componentId}
-                    </div>
+                    </a>
                     {c.description && (
                       <div className="text-xs text-muted-foreground truncate mt-0.5">
                         {c.description}
