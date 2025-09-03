@@ -3,6 +3,7 @@
 import WebsiteEditor from "@/components/WebsiteEditor";
 import { api, type UpdateComponentRequest } from "@/lib/api";
 import type { ComponentTree } from "@/lib/editorTypes";
+import { serializeTreeToSource } from "@/lib/serializer";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
@@ -32,8 +33,11 @@ export default function ClientEditor({
   });
 
   async function handleSave(serialized: string) {
+    const parsed = JSON.parse(serialized) as ComponentTree;
+    const source = serializeTreeToSource(parsed, name || "Component");
     await updateMutation.mutateAsync({
-      tree: JSON.parse(serialized) as ComponentTree,
+      tree: parsed,
+      source,
       name: name || undefined,
       description: description || undefined,
     });

@@ -1,10 +1,12 @@
 "use client";
 
+import CodeEditor from "@/components/CodeEditor";
 import { api } from "@/lib/api";
 import { parseJsxToTree } from "@/lib/serializer";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 
 const SAMPLE = `
 export default function Hero() {
@@ -32,11 +34,13 @@ export default function JsxImportForm() {
   const createMutation = useMutation({
     mutationFn: api.createComponent,
     onSuccess: (data) => {
+      toast.success("Component imported");
       router.push(`/preview/${data.component.componentId}`);
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : "Something went wrong";
       setError(message);
+      toast.error(message);
     },
   });
 
@@ -46,15 +50,19 @@ export default function JsxImportForm() {
     setError(null);
     try {
       const tree = await parseJsxToTree(code);
-      await createMutation.mutateAsync({
-        tree,
-        source: code,
-        name: "Imported Component",
-        description: description || undefined,
-      });
+      await toast.promise(
+        createMutation.mutateAsync({
+          tree,
+          source: code,
+          name: "Imported Component",
+          description: description || undefined,
+        }),
+        { loading: "Parsing…", success: "Parsed", error: "Parse failed" }
+      );
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong";
       setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -64,12 +72,9 @@ export default function JsxImportForm() {
     <form onSubmit={handleSubmit} className="w-full max-w-6xl space-y-4">
       <div className="rounded-xl border bg-card p-4">
         <label className="text-sm font-medium">Paste React component code</label>
-        <textarea
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          className="mt-2 w-full min-h-[280px] font-mono text-sm rounded-md border bg-background p-3"
-          placeholder="Paste a function component that returns JSX..."
-        />
+        <div className="mt-2">
+          <CodeEditor value={code} onChange={setCode} fileName="NewComponent.tsx" maxHeight={240} />
+        </div>
         {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
         <div className="mt-4 flex items-center gap-3">
           <input

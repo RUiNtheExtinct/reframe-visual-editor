@@ -53,6 +53,72 @@ export async function parseJsxToTree(source: string): Promise<ComponentTree> {
   }
 }
 
+export function serializeTreeToSource(tree: ComponentTree, componentName?: string): string {
+  const name = (componentName && sanitizeComponentName(componentName)) || "Component";
+  const body = serializeNode(tree.root, 2);
+  const code = `export default function ${name}() {\n  return (\n${body}\n  );\n}`;
+  return code;
+}
+
+function sanitizeComponentName(name: string): string {
+  // Remove invalid chars and ensure it starts with a letter, then PascalCase
+  const cleaned = name
+    .replace(/[^a-zA-Z0-9_]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join("");
+  return cleaned.match(/^[A-Za-z_]/) ? cleaned : `C${cleaned}`;
+}
+
+function serializeNode(node: EditorNode, indent: number): string {
+  const pad = (n: number) => " ".repeat(n);
+  if (node.type === "text") {
+    const n = node as TextNode;
+    return `${pad(indent)}${escapeText(n.text)}`;
+  }
+  const n = node as ElementNode;
+  const open = serializeOpeningTag(n);
+  if (!n.children || n.children.length === 0) {
+    return `${pad(indent)}${open}</${n.tag}>`;
+  }
+  const children = n.children.map((c) => serializeNode(c, indent + 2)).join("\n");
+  return `${pad(indent)}${open}\n${children}\n${pad(indent)}</${n.tag}>`;
+}
+
+function escapeText(text: string): string {
+  // Basic JSX text escape
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+}
+
+function serializeOpeningTag(node: ElementNode): string {
+  const attrs: string[] = [];
+  const cls = node.props?.className;
+  if (cls) attrs.push(`className=\"${escapeAttribute(cls)}\"`);
+  if (node.style && Object.keys(node.style).length > 0) {
+    attrs.push(`style={{ ${serializeStyle(node.style)} }}`);
+  }
+  const attrsJoined = attrs.length ? " " + attrs.join(" ") : "";
+  return `<${node.tag}${attrsJoined}>`;
+}
+
+function serializeStyle(style: NonNullable<ElementNode["style"] | TextNode["style"]>): string {
+  const entries = Object.entries(style as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined && v !== null && v !== "")
+    .map(([k, v]) => `${k}: ${formatStyleValue(v)}`);
+  return entries.join(", ");
+}
+
+function formatStyleValue(value: unknown): string {
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return `\"${value}\"`;
+  return '""';
+}
+
+function escapeAttribute(value: string): string {
+  return value.replace(/"/g, '\\"');
+}
+
 function fallbackTreeFromText(text: string): ComponentTree {
   const root: ElementNode = {
     type: "element",

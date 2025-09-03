@@ -16,7 +16,7 @@ export default async function ComponentsPage({
   return (
     <div className="max-w-6xl mx-auto px-6 sm:px-12 py-8">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-semibold">Components</h1>
+        <h1 className="text-2xl font-semibold">My Components</h1>
         <form className="flex items-center gap-2" action="/components" method="get">
           <input
             name="q"
@@ -31,7 +31,12 @@ export default async function ComponentsPage({
         {items.map((c) => (
           <li key={c.componentId} className="p-4 flex items-center justify-between">
             <div className="min-w-0">
-              <div className="text-sm font-medium truncate">{c.name ?? c.componentId}</div>
+              <a
+                className="text-sm font-medium truncate underline"
+                href={`/preview/${c.componentId}`}
+              >
+                {c.name ?? c.componentId}
+              </a>
               {c.description && (
                 <div className="text-xs text-muted-foreground truncate">{c.description}</div>
               )}

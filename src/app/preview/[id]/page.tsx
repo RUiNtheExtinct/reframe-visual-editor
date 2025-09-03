@@ -48,7 +48,6 @@ export default async function PreviewPage({ params }: { params: { id: string } }
       </header>
 
       <div className="mx-auto mt-6 max-w-6xl overflow-hidden rounded-2xl">
-        {/* Client wrapper for editing */}
         <ClientEditor
           id={comp.componentId}
           initialTree={comp.tree}

@@ -1,5 +1,6 @@
 "use client";
 
+import CodeEditor from "@/components/CodeEditor";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -10,13 +11,15 @@ import {
 } from "@/components/ui/select";
 import { FONT_OPTIONS } from "@/constants";
 import type { ComponentTree, EditorNode, ElementNode, TextNode } from "@/lib/editorTypes";
+import { parseJsxToTree, serializeTreeToSource } from "@/lib/serializer";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 type WebsiteEditorProps = {
   tree: ComponentTree;
   onChange?: (tree: ComponentTree) => void;
-  onSave?: (serialized: string) => void;
+  onSave?: (serialized: string) => Promise<void> | void;
   autoSave?: boolean;
   title?: string;
   name?: string;
@@ -36,12 +39,41 @@ export default function WebsiteEditor({
 }: WebsiteEditorProps) {
   const [currentTree, setCurrentTree] = useState<ComponentTree>(tree);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"design" | "code">("design");
+  const [code, setCode] = useState<string>(serializeTreeToSource(tree, name));
   const selectedNode = useMemo(
     () => (selectedId ? findNode(currentTree.root, selectedId) : null),
     [currentTree, selectedId]
   );
 
   useEffect(() => setCurrentTree(tree), [tree]);
+  // Keep code in sync when not actively editing code
+  useEffect(() => {
+    if (activeTab !== "code") {
+      setCode(serializeTreeToSource(currentTree, name));
+    }
+  }, [currentTree, name, activeTab]);
+
+  // When switching to Code tab, refresh code from current tree to reflect latest UI edits
+  useEffect(() => {
+    if (activeTab === "code") {
+      setCode(serializeTreeToSource(currentTree, name));
+    }
+  }, [activeTab]);
+
+  // Parse code edits back to tree (debounced)
+  useEffect(() => {
+    if (activeTab !== "code") return;
+    const id = setTimeout(async () => {
+      try {
+        const next = await parseJsxToTree(code);
+        setCurrentTree(next);
+      } catch {
+        // Ignore parse errors silently; the import function already handles toast on failure
+      }
+    }, 500);
+    return () => clearTimeout(id);
+  }, [code, activeTab]);
 
   const lastSerializedRef = useRef<string | null>(null);
   useEffect(() => {
@@ -71,16 +103,19 @@ export default function WebsiteEditor({
     if (!selectedId) return;
     setCurrentTree((prev) => ({ root: deleteNode(prev.root, selectedId) }));
     setSelectedId(null);
+    toast.success("Deleted element");
   }, [selectedId]);
 
   const handleDuplicate = useCallback(() => {
     if (!selectedId) return;
     setCurrentTree((prev) => ({ root: duplicateNode(prev.root, selectedId, generateId) }));
+    toast.success("Duplicated element");
   }, [selectedId]);
 
   const handleAddText = useCallback(() => {
     if (!selectedId) return;
     setCurrentTree((prev) => ({ root: addSiblingText(prev.root, selectedId, generateId) }));
+    toast.success("Added text element");
   }, [selectedId]);
 
   return (
@@ -88,13 +123,53 @@ export default function WebsiteEditor({
       <div className="col-span-12 lg:col-span-8 rounded-xl border bg-card p-3 overflow-auto transition-shadow duration-200 hover:shadow-lg">
         <div className="flex items-center justify-between px-1 py-2">
           <h2 className="text-sm font-medium text-muted-foreground">{title ?? "Preview"}</h2>
-          <div className="text-xs text-muted-foreground">Click elements to edit</div>
+          <div className="flex items-center gap-2">
+            <div className="inline-flex items-center rounded-md border bg-background p-0.5">
+              <button
+                className={`px-3 py-1.5 text-xs rounded-[6px] ${
+                  activeTab === "design" ? "bg-card border" : "text-muted-foreground"
+                }`}
+                onClick={() => setActiveTab("design")}
+              >
+                UI
+              </button>
+              <button
+                className={`px-3 py-1.5 text-xs rounded-[6px] ${
+                  activeTab === "code" ? "bg-card border" : "text-muted-foreground"
+                }`}
+                onClick={() => setActiveTab("code")}
+              >
+                Code
+              </button>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const src = activeTab === "code" ? code : serializeTreeToSource(currentTree, name);
+                await navigator.clipboard.writeText(src);
+                toast.success("Copied component TSX");
+              }}
+            >
+              Copy TSX
+            </Button>
+          </div>
         </div>
-        <motion.div
-          className="rounded-lg border bg-background p-6 min-h-[480px] transition-colors"
-          layout
-        >
-          {renderNode(currentTree.root, selectedId, setSelectedId)}
+        <motion.div className="rounded-lg border bg-background p-0 transition-colors" layout>
+          {activeTab === "design" ? (
+            <div className="p-6 min-h-[520px]">
+              <div className="text-xs text-muted-foreground mb-2">Click elements to edit</div>
+              {renderNode(currentTree.root, selectedId, setSelectedId)}
+            </div>
+          ) : (
+            <div className="p-2">
+              <CodeEditor
+                value={code}
+                onChange={setCode}
+                fileName={`${(name || "Component").replace(/\s+/g, "")}.tsx`}
+              />
+            </div>
+          )}
         </motion.div>
       </div>
       <div className="col-span-12 lg:col-span-4 rounded-xl border bg-card p-4 transition-all duration-200 lg:sticky lg:top-6 h-fit">
@@ -163,7 +238,17 @@ export default function WebsiteEditor({
             whileTap={{ scale: 0.97 }}
             whileHover={{ scale: 1.01 }}
           >
-            <Button onClick={() => onSave(JSON.stringify(currentTree))}>Save changes</Button>
+            <Button
+              onClick={() =>
+                toast.promise(Promise.resolve(onSave(JSON.stringify(currentTree))), {
+                  loading: "Saving…",
+                  success: "Saved",
+                  error: "Save failed",
+                })
+              }
+            >
+              Save changes
+            </Button>
           </motion.div>
         )}
       </div>
@@ -322,21 +407,26 @@ function CommonStyleControls({
       <div>
         <label className="block text-xs mb-1 text-muted-foreground">Font Family</label>
         <Select
-          value={String(style.fontFamily ?? "")}
+          value={style.fontFamily ? style.fontFamily : "default"}
           onValueChange={(val) =>
             onChange({
               ...node,
-              style: { ...style, fontFamily: val || undefined } as unknown as ElementNode["style"],
+              style: {
+                ...style,
+                fontFamily: val === "default" ? undefined : val,
+              } as unknown as ElementNode["style"],
             })
           }
         >
-          <SelectTrigger>
+          <SelectTrigger className="w-full">
             <SelectValue placeholder="Choose font" />
           </SelectTrigger>
           <SelectContent>
             {FONT_OPTIONS.map((opt) => (
-              <SelectItem key={opt.label} value={String(opt.value)}>
-                <span style={{ fontFamily: opt.value || undefined }}>{opt.label}</span>
+              <SelectItem key={opt.label} value={opt.value}>
+                <span style={{ fontFamily: opt.value === "default" ? undefined : opt.value }}>
+                  {opt.label}
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
