@@ -2,7 +2,23 @@
 
 import CodeEditor from "@/components/CodeEditor";
 import PreviewSurface from "@/components/PreviewSurface";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { FONT_OPTIONS } from "@/constants";
 import { api } from "@/lib/api";
 import { parseJsxToTree } from "@/lib/serializer";
 import { useMutation } from "@tanstack/react-query";
@@ -114,6 +130,21 @@ export default function SandboxEditor({
   useEffect(() => {
     setPreviewKey((k) => k + 1);
   }, [code, overridesRevision]);
+
+  // Apply non-CSS overrides (like text) after preview mounts or overrides change
+  useEffect(() => {
+    if (activeTab !== "ui") return;
+    const root = shadowRootRef.current;
+    if (!root) return;
+    try {
+      const entries = Object.entries(overridesRef.current || {});
+      for (const [selector, data] of entries) {
+        if (!data || typeof (data as any).text !== "string") continue;
+        const el = root.querySelector(selector) as HTMLElement | null;
+        if (el) el.textContent = (data as any).text as string;
+      }
+    } catch {}
+  }, [overridesRevision, previewKey, activeTab]);
 
   // Hover/selection handlers inside shadow root (re-bind on preview remount or tab change)
   useEffect(() => {
@@ -356,23 +387,23 @@ export default function SandboxEditor({
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-foreground/70 mb-1">Color</label>
-                  <input
-                    type="color"
-                    className="w-full h-9 rounded-md border bg-background"
-                    value={ensureColor(selectedStyle["color"] as string | undefined)}
-                    onChange={(e) => applyStyleChange("color", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-foreground/70 mb-1">Background</label>
-                  <input
-                    type="color"
-                    className="w-full h-9 rounded-md border bg-background"
-                    value={ensureColor(selectedStyle["backgroundColor"] as string | undefined)}
-                    onChange={(e) => applyStyleChange("backgroundColor", e.target.value)}
-                  />
+                <div className="col-span-2 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-foreground/70 mb-1">Text Color</label>
+                    <ColorInputRow
+                      value={ensureColor(selectedStyle["color"] as string | undefined)}
+                      onChange={(c) => applyStyleChange("color", c)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-foreground/70 mb-1">
+                      Background Color
+                    </label>
+                    <ColorInputRow
+                      value={ensureColor(selectedStyle["backgroundColor"] as string | undefined)}
+                      onChange={(c) => applyStyleChange("backgroundColor", c)}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs text-foreground/70 mb-1">Font Size (px)</label>
@@ -393,6 +424,180 @@ export default function SandboxEditor({
                   />
                 </div>
               </div>
+
+              {/* Typography */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-foreground/70 mb-1">Font Family</label>
+                  <Select
+                    value={(selectedStyle["fontFamily"] as string) || "default"}
+                    onValueChange={(val) =>
+                      applyStyleChange("fontFamily", val === "default" ? "" : val)
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose font" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FONT_OPTIONS.map((opt) => (
+                        <SelectItem
+                          key={opt.label}
+                          value={opt.value === "default" ? "default" : opt.value}
+                        >
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end gap-2">
+                  <button
+                    className={`rounded-md w-fit border px-4 py-2 text-sm ${selectedStyle["fontStyle"] === "italic" ? "bg-foreground text-background" : ""}`}
+                    onClick={() =>
+                      applyStyleChange(
+                        "fontStyle",
+                        selectedStyle["fontStyle"] === "italic" ? "normal" : "italic"
+                      )
+                    }
+                  >
+                    Italic
+                  </button>
+                  <div className="w-full">
+                    <label className="block text-xs text-foreground/70 mb-1">Weight</label>
+                    <Select
+                      value={String(selectedStyle["fontWeight"] ?? 400)}
+                      onValueChange={(val) => applyStyleChange("fontWeight", Number(val))}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[100, 200, 300, 400, 500, 600, 700, 800, 900].map((w) => (
+                          <SelectItem key={w} value={String(w)}>
+                            {w}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* More options */}
+              <Accordion type="single" collapsible>
+                <AccordionItem value="more">
+                  <AccordionTrigger className="px-3">More options</AccordionTrigger>
+                  <AccordionContent>
+                    <div className="px-3 pb-3 pt-1 grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-foreground/70 mb-1">
+                          Border Style
+                        </label>
+                        <Select
+                          value={(selectedStyle["borderStyle"] as string) || "none"}
+                          onValueChange={(val) =>
+                            applyStyleChange("borderStyle", val === "none" ? "" : val)
+                          }
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {["none", "solid", "dashed", "dotted", "double"].map((s) => (
+                              <SelectItem key={s} value={s}>
+                                {s}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-foreground/70 mb-1">
+                          Border Width (px)
+                        </label>
+                        <input
+                          type="number"
+                          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                          value={Number((selectedStyle as any)["borderWidth"] ?? 0)}
+                          onChange={(e) =>
+                            applyStyleChange("borderWidth", Number(e.target.value || 0))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-foreground/70 mb-1">
+                          Border Radius (px)
+                        </label>
+                        <input
+                          type="number"
+                          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                          value={Number((selectedStyle as any)["borderRadius"] ?? 0)}
+                          onChange={(e) =>
+                            applyStyleChange("borderRadius", Number(e.target.value || 0))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-foreground/70 mb-1">
+                          Border Color
+                        </label>
+                        <ColorInputRow
+                          value={ensureColor(
+                            (selectedStyle as any)["borderColor"] as string | undefined
+                          )}
+                          onChange={(c) => applyStyleChange("borderColor", c)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="px-3 pb-3 pt-1 space-y-4">
+                      <div className="space-y-2">
+                        <div className="text-xs font-semibold text-foreground/70">
+                          Text Gradient
+                        </div>
+                        <GradientControls
+                          current={(selectedStyle as any)["backgroundImage"] as string | undefined}
+                          onChange={(g) => {
+                            const bi = (selectedStyle as any)["backgroundImage"] as
+                              | string
+                              | undefined;
+                            const parts = (bi && bi.match(/linear-gradient\([^\)]*\)/g)) || [];
+                            const bg = parts.length >= 2 ? parts[0] : undefined;
+                            const layers: string[] = [];
+                            if (bg) layers.push(bg);
+                            if (g) layers.push(g);
+                            applyStyleChange("backgroundImage", layers.join(", "));
+                            applyStyleChange("WebkitBackgroundClip", g ? "text" : "");
+                            applyStyleChange("WebkitTextFillColor", g ? "transparent" : "");
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-xs font-semibold text-foreground/70">
+                          Background Gradient
+                        </div>
+                        <GradientControls
+                          current={(selectedStyle as any)["backgroundImage"] as string | undefined}
+                          onChange={(g) => {
+                            const bi = (selectedStyle as any)["backgroundImage"] as
+                              | string
+                              | undefined;
+                            const parts = (bi && bi.match(/linear-gradient\([^\)]*\)/g)) || [];
+                            const text = parts.length >= 2 ? parts[1] : undefined;
+                            const layers: string[] = [];
+                            if (g) layers.push(g);
+                            if (text) layers.push(text);
+                            applyStyleChange("backgroundImage", layers.join(", "));
+                            applyStyleChange("WebkitBackgroundClip", text ? "text" : "");
+                            applyStyleChange("WebkitTextFillColor", text ? "transparent" : "");
+                            if (g) applyStyleChange("backgroundColor", "");
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </div>
           ) : (
             <p className="text-sm text-foreground/70">
@@ -617,3 +822,138 @@ const DEFAULT_SNIPPET = `export default function Component() {
     </div>
   );
 }`;
+
+function GradientControls({
+  current,
+  onChange,
+}: {
+  current?: string;
+  onChange: (value: string | null) => void;
+}) {
+  const parsed = parseLinearGradient(current);
+  const [angle, setAngle] = useState<number>(parsed?.angle ?? 90);
+  const [stop, setStop] = useState<number>(parsed?.stop ?? 50);
+  const [start, setStart] = useState<string>(parsed?.start ?? "#e11d48");
+  const [end, setEnd] = useState<string>(parsed?.end ?? "#16a34a");
+  const [enabled, setEnabled] = useState<boolean>(Boolean(parsed));
+
+  useEffect(() => {
+    if (!enabled) return;
+    const clamped = Math.max(0, Math.min(100, stop));
+    const spread = 20; // softness of blend region (in percent)
+    const half = spread / 2;
+    const a = Math.max(0, Math.min(100, clamped - half));
+    const b = Math.max(0, Math.min(100, clamped + half));
+    const val = `linear-gradient(${angle}deg, ${start} 0%, ${start} ${a}%, ${end} ${b}%, ${end} 100%)`;
+    onChange(val);
+  }, [enabled, angle, stop, start, end]);
+
+  return (
+    <div className="rounded-md border p-3 bg-background space-y-3">
+      <div className="flex items-center gap-2">
+        <Checkbox
+          checked={enabled}
+          onCheckedChange={(v) => {
+            const next = Boolean(v);
+            setEnabled(next);
+            if (!next) onChange(null);
+          }}
+        />
+        <span className="text-xs text-foreground/70">Enable</span>
+      </div>
+      {enabled && (
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-foreground/70 mb-1">Angle</label>
+            <Slider
+              value={[angle]}
+              onValueChange={(vals) => setAngle(Number(vals?.[0] ?? 0))}
+              min={0}
+              max={360}
+            />
+            <div className="mt-1 text-[10px] text-foreground/60">{angle}°</div>
+          </div>
+          <div>
+            <label className="block text-xs text-foreground/70 mb-1">Balance</label>
+            <Slider
+              value={[stop]}
+              onValueChange={(vals) => setStop(Number(vals?.[0] ?? 0))}
+              min={0}
+              max={100}
+            />
+            <div className="mt-1 text-[10px] text-foreground/60">{stop}%</div>
+          </div>
+          <div className="col-span-2 grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs text-foreground/70 mb-1">Start</label>
+              <ColorInputRow value={ensureColor(start)} onChange={setStart} />
+            </div>
+            <div>
+              <label className="block text-xs text-foreground/70 mb-1">End</label>
+              <ColorInputRow value={ensureColor(end)} onChange={setEnd} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function parseLinearGradient(
+  input?: string
+): { angle: number; stop: number; start: string; end: string } | null {
+  if (!input) return null;
+  // Try four-stop format: start 0%, start P%, end P%, end 100%
+  let m = input.match(
+    /linear-gradient\((\d+)deg,\s*([^,]+?)\s*0%\s*,\s*\2\s*(\d+)%\s*,\s*([^,]+?)\s*\3%\s*,\s*\4\s*100%\)/i
+  );
+  if (m) {
+    const angle = parseInt(m[1], 10);
+    const start = m[2].trim();
+    const stop = parseInt(m[3], 10);
+    const end = m[4].trim();
+    if (Number.isNaN(angle)) return null;
+    return { angle, stop: Number.isNaN(stop) ? 50 : stop, start, end };
+  }
+  // Fallback to two-stop format: start 0%, end P%
+  m = input.match(/linear-gradient\((\d+)deg,\s*([^,]+?)\s*0%\s*,\s*([^\s,]+)\s*(\d+)%\)/i);
+  if (m) {
+    const angle = parseInt(m[1], 10);
+    const start = m[2].trim();
+    const end = m[3].trim();
+    const stop = parseInt(m[4], 10);
+    if (Number.isNaN(angle)) return null;
+    return { angle, stop: Number.isNaN(stop) ? 50 : stop, start, end };
+  }
+  return null;
+}
+
+function ColorInputRow({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const display = normalizeColorForInput(value);
+  return (
+    <input
+      type="color"
+      className="w-full h-10 rounded-md bg-background appearance-none"
+      value={display}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label="Pick color"
+    />
+  );
+}
+
+function normalizeColorForInput(value?: string): string {
+  if (!value) return "#000000";
+  const v = value.trim().toLowerCase();
+  if (v.startsWith("#")) {
+    return v.length === 4 ? `#${v[1]}${v[1]}${v[2]}${v[2]}${v[3]}${v[3]}` : v.slice(0, 7);
+  }
+  const rgba = v.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (rgba) {
+    const toHex = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, "0");
+    const r = parseInt(rgba[1], 10);
+    const g = parseInt(rgba[2], 10);
+    const b = parseInt(rgba[3], 10);
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  }
+  return "#000000";
+}
