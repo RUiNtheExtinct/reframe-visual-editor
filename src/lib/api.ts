@@ -9,13 +9,16 @@ const client: AxiosInstance = axios.create({
 export type CreateComponentRequest = {
   name?: string;
   source?: string;
+  description?: string;
   tree: ComponentTree;
 };
 
 export type CreateComponentResponse = { component: StoredComponent };
 export type GetComponentResponse = { component: StoredComponent };
 export type ListComponentsResponse = { items: StoredComponent[] };
-export type UpdateComponentRequest = Partial<Pick<StoredComponent, "name" | "source">> & {
+export type UpdateComponentRequest = Partial<
+  Pick<StoredComponent, "name" | "source" | "description">
+> & {
   tree?: ComponentTree;
 };
 export type UpdateComponentResponse = { component: StoredComponent };

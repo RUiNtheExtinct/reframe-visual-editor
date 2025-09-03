@@ -137,3 +137,90 @@
     background-attachment: fixed;
   }
 }
+
+/* Animated aurora background used across pages */
+@keyframes auroraShift {
+  0% {
+    background-position:
+      0% 40%,
+      100% 60%,
+      50% 0%;
+  }
+  50% {
+    background-position:
+      100% 60%,
+      0% 40%,
+      50% 100%;
+  }
+  100% {
+    background-position:
+      0% 40%,
+      100% 60%,
+      50% 0%;
+  }
+}
+
+.bg-animated-aurora {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(
+      60rem 30rem at 0% 20%,
+      color-mix(in oklab, var(--primary) 24%, transparent) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      50rem 25rem at 100% 10%,
+      color-mix(in oklab, var(--accent) 22%, transparent) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      70rem 35rem at 50% 110%,
+      color-mix(in oklab, var(--foreground) 6%, transparent) 0%,
+      transparent 60%
+    );
+  background-size:
+    160% 160%,
+    160% 160%,
+    160% 160%;
+  animation: auroraShift 24s ease-in-out infinite;
+  filter: blur(60px);
+  opacity: 0.35;
+}
+
+/* Tasteful hero patterns (theme-aware) */
+.bg-dot-pattern {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: radial-gradient(
+    color-mix(in oklab, var(--foreground) 12%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 18px 18px;
+  opacity: 0.18;
+}
+
+.bg-grid-pattern {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in oklab, var(--foreground) 9%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--foreground) 9%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 56px 56px;
+  mask-image: radial-gradient(closest-side, black 60%, transparent 100%);
+  opacity: 0.14;
+}

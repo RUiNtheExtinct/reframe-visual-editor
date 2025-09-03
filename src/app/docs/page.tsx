@@ -3,16 +3,16 @@ import Image from "next/image";
 export default function DocsPage() {
   return (
     <div className="min-h-screen px-6 py-10 sm:px-12 max-w-4xl mx-auto">
-      <div className="relative h-44 w-full mb-8 overflow-hidden rounded-xl border">
+      <div className="relative h-48 w-full mb-8 overflow-hidden rounded-2xl border">
         <Image
-          src="https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=1600&auto=format&fit=crop"
-          alt="team working"
+          src="https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=1920&auto=format&fit=crop"
+          alt="team collaborating at laptops"
           fill
           className="object-cover"
           priority
         />
       </div>
-      <h1 className="text-3xl font-bold">Runable Visual Editor — Documentation</h1>
+      <h1 className="text-3xl font-bold">Runnable Visual Editor — Documentation</h1>
       <p className="mt-2 text-muted-foreground">
         Paste any React component, preview it, and visually edit text and basic styles. Changes
         auto-save to the backend.
@@ -20,28 +20,32 @@ export default function DocsPage() {
 
       <section className="mt-10 space-y-3">
         <h2 className="text-xl font-semibold">Getting started</h2>
-        <ol className="list-decimal ml-5 space-y-2">
-          <li>
-            Run <code className="px-1 py-0.5 rounded bg-muted">pnpm install</code>
-          </li>
-          <li>
-            Run <code className="px-1 py-0.5 rounded bg-muted">pnpm dev</code> and open{" "}
-            <code className="px-1 py-0.5 rounded bg-muted">http://localhost:3000</code>
-          </li>
-          <li>Paste your component code and click “Parse & Preview”.</li>
-          <li>Click any element in the preview, then edit from the Inspector.</li>
-        </ol>
+        <div className="rounded-xl border bg-card p-4">
+          <ol className="list-decimal ml-5 space-y-2">
+            <li>
+              Run <code className="px-1 py-0.5 rounded bg-muted">pnpm install</code>
+            </li>
+            <li>
+              Run <code className="px-1 py-0.5 rounded bg-muted">pnpm dev</code> and open{" "}
+              <code className="px-1 py-0.5 rounded bg-muted">http://localhost:3000</code>
+            </li>
+            <li>Paste your component code and click “Parse &amp; Preview”.</li>
+            <li>Click any element in the preview, then edit from the Inspector.</li>
+          </ol>
+        </div>
       </section>
 
       <section className="mt-10 space-y-3">
         <h2 className="text-xl font-semibold">Editable properties</h2>
-        <ul className="list-disc ml-5 space-y-1">
-          <li>Text content</li>
-          <li>Text color</li>
-          <li>Font size</li>
-          <li>Bold/normal</li>
-          <li>Background color</li>
-        </ul>
+        <div className="rounded-xl border bg-card p-4">
+          <ul className="list-disc ml-5 space-y-1">
+            <li>Text content</li>
+            <li>Text color</li>
+            <li>Font size</li>
+            <li>Bold/normal</li>
+            <li>Background color</li>
+          </ul>
+        </div>
       </section>
 
       <section className="mt-10 space-y-3">
@@ -66,24 +70,26 @@ pnpm dlx drizzle-kit push`}</pre>
         <p className="text-sm text-muted-foreground">
           Responses contain the serialized component tree.
         </p>
-        <ul className="list-disc ml-5 space-y-1">
-          <li>
-            <code className="px-1 py-0.5 rounded bg-muted">POST /api/component</code> → create
-            component
-          </li>
-          <li>
-            <code className="px-1 py-0.5 rounded bg-muted">GET /api/component/[id]</code> → fetch
-            component
-          </li>
-          <li>
-            <code className="px-1 py-0.5 rounded bg-muted">PUT /api/component/[id]</code> → update
-            component
-          </li>
-        </ul>
+        <div className="rounded-xl border bg-card p-4">
+          <ul className="list-disc ml-5 space-y-1">
+            <li>
+              <code className="px-1 py-0.5 rounded bg-muted">POST /api/component</code> → create
+              component
+            </li>
+            <li>
+              <code className="px-1 py-0.5 rounded bg-muted">GET /api/component/[id]</code> → fetch
+              component
+            </li>
+            <li>
+              <code className="px-1 py-0.5 rounded bg-muted">PUT /api/component/[id]</code> → update
+              component
+            </li>
+          </ul>
+        </div>
       </section>
 
       <section className="mt-10 space-y-3">
-        <h2 className="text-xl font-semibold">Vercel CLI - secrets for CI</h2>
+        <h2 className="text-xl font-semibold">Vercel CLI — secrets for CI</h2>
         <ol className="list-decimal ml-5 space-y-2 text-sm">
           <li>
             <code className="px-1 py-0.5 rounded bg-muted">pnpm dlx vercel login</code> then{" "}

@@ -26,6 +26,7 @@ export default function JsxImportForm() {
   const [code, setCode] = useState<string>(SAMPLE.trim());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [description, setDescription] = useState<string>("");
   const router = useRouter();
 
   const createMutation = useMutation({
@@ -45,7 +46,12 @@ export default function JsxImportForm() {
     setError(null);
     try {
       const tree = await parseJsxToTree(code);
-      await createMutation.mutateAsync({ tree, source: code, name: "Imported Component" });
+      await createMutation.mutateAsync({
+        tree,
+        source: code,
+        name: "Imported Component",
+        description: description || undefined,
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong";
       setError(message);
@@ -55,7 +61,7 @@ export default function JsxImportForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-5xl space-y-4">
+    <form onSubmit={handleSubmit} className="w-full max-w-6xl space-y-4">
       <div className="rounded-xl border bg-card p-4">
         <label className="text-sm font-medium">Paste React component code</label>
         <textarea
@@ -66,6 +72,12 @@ export default function JsxImportForm() {
         />
         {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
         <div className="mt-4 flex items-center gap-3">
+          <input
+            placeholder="Optional description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="flex-1 rounded-md border bg-background px-3 py-2 text-sm"
+          />
           <button
             type="submit"
             disabled={loading || createMutation.isPending}

@@ -1,10 +1,14 @@
 import type { ComponentTree } from "@/lib/editorTypes";
-import { createComponent, listComponents } from "@/lib/store";
+import { createComponent, listComponentsPaginated } from "@/lib/store";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function GET() {
-  const items = await listComponents();
-  return NextResponse.json({ items });
+export async function GET(req: NextRequest) {
+  const { searchParams } = req.nextUrl;
+  const page = Number(searchParams.get("page") ?? "1");
+  const pageSize = Number(searchParams.get("pageSize") ?? "10");
+  const q = searchParams.get("q") ?? undefined;
+  const result = await listComponentsPaginated(Math.max(page, 1), Math.max(pageSize, 1), q);
+  return NextResponse.json(result);
 }
 
 export async function POST(req: NextRequest) {
@@ -13,10 +17,11 @@ export async function POST(req: NextRequest) {
     const tree: ComponentTree = body.tree;
     const name: string | undefined = body.name;
     const source: string | undefined = body.source;
+    const description: string | undefined = body.description;
     if (!tree || !tree.root) {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
-    const comp = await createComponent({ tree, name, source });
+    const comp = await createComponent({ tree, name, source, description });
     return NextResponse.json({ component: comp }, { status: 201 });
   } catch (err) {
     console.error(err);

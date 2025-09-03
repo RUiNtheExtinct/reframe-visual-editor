@@ -1,3 +1,5 @@
+import AnimatedGradient from "@/components/AnimatedGradient";
+import Navbar from "@/components/Navbar";
 import QueryProvider from "@/components/QueryProvider";
 import ThemeProvider from "@/components/ThemeProvider";
 import type { Metadata } from "next";
@@ -28,7 +30,13 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <ThemeProvider>
-          <QueryProvider>{children}</QueryProvider>
+          <QueryProvider>
+            <Navbar />
+            <div className="relative">
+              <AnimatedGradient />
+              {children}
+            </div>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

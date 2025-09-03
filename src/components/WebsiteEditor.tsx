@@ -1,5 +1,14 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { FONT_OPTIONS } from "@/constants";
 import type { ComponentTree, EditorNode, ElementNode, TextNode } from "@/lib/editorTypes";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -10,6 +19,9 @@ type WebsiteEditorProps = {
   onSave?: (serialized: string) => void;
   autoSave?: boolean;
   title?: string;
+  name?: string;
+  description?: string;
+  onMetaChange?: (partial: { name?: string; description?: string }) => void;
 };
 
 export default function WebsiteEditor({
@@ -18,6 +30,9 @@ export default function WebsiteEditor({
   onSave,
   autoSave = true,
   title,
+  name,
+  description,
+  onMetaChange,
 }: WebsiteEditorProps) {
   const [currentTree, setCurrentTree] = useState<ComponentTree>(tree);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -37,7 +52,7 @@ export default function WebsiteEditor({
     const id = setTimeout(() => {
       lastSerializedRef.current = serialized;
       onSave(serialized);
-    }, 600);
+    }, 1000);
     return () => clearTimeout(id);
   }, [currentTree, autoSave, onSave, onChange]);
 
@@ -84,6 +99,25 @@ export default function WebsiteEditor({
       </div>
       <div className="col-span-12 lg:col-span-4 rounded-xl border bg-card p-4 transition-all duration-200 lg:sticky lg:top-6 h-fit">
         <h3 className="text-base font-semibold mb-4">Inspector</h3>
+        {/* Meta fields */}
+        <div className="mb-4 space-y-3">
+          <div>
+            <label className="block text-xs mb-1 text-muted-foreground">Component name</label>
+            <input
+              className="w-full rounded-md border px-3 py-2 bg-background text-sm"
+              value={name ?? ""}
+              onChange={(e) => onMetaChange?.({ name: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-xs mb-1 text-muted-foreground">Description</label>
+            <input
+              className="w-full rounded-md border px-3 py-2 bg-background text-sm"
+              value={description ?? ""}
+              onChange={(e) => onMetaChange?.({ description: e.target.value })}
+            />
+          </div>
+        </div>
         <AnimatePresence mode="wait" initial={false}>
           {selectedNode ? (
             <motion.div
@@ -112,35 +146,25 @@ export default function WebsiteEditor({
         </AnimatePresence>
         {selectedNode && (
           <div className="mt-4 grid grid-cols-3 gap-2">
-            <button
-              className="border rounded-md px-2 py-1 text-sm hover:bg-accent"
-              onClick={handleAddText}
-            >
+            <Button variant="outline" size="sm" onClick={handleAddText}>
               + Text
-            </button>
-            <button
-              className="border rounded-md px-2 py-1 text-sm hover:bg-accent"
-              onClick={handleDuplicate}
-            >
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleDuplicate}>
               Duplicate
-            </button>
-            <button
-              className="border rounded-md px-2 py-1 text-sm hover:bg-accent"
-              onClick={handleDelete}
-            >
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleDelete}>
               Delete
-            </button>
+            </Button>
           </div>
         )}
         {onSave && (
-          <motion.button
-            className="mt-6 inline-flex items-center justify-center rounded-md bg-foreground text-background py-2 px-3 text-sm font-medium"
+          <motion.div
+            className="mt-6 inline-flex"
             whileTap={{ scale: 0.97 }}
             whileHover={{ scale: 1.01 }}
-            onClick={() => onSave(JSON.stringify(currentTree))}
           >
-            Save changes
-          </motion.button>
+            <Button onClick={() => onSave(JSON.stringify(currentTree))}>Save changes</Button>
+          </motion.div>
         )}
       </div>
     </div>
@@ -161,7 +185,7 @@ function renderNode(
           e.stopPropagation();
           setSelectedId(node.id);
         }}
-        className={isSelected ? "ring-2 ring-blue-500 ring-offset-2 rounded-sm" : ""}
+        className={isSelected ? "ring-2 ring-primary/70 ring-offset-2 rounded-sm" : ""}
         style={convertStyle(node.style)}
       >
         {node.text}
@@ -173,7 +197,7 @@ function renderNode(
   const Comp = el.tag as unknown as React.ElementType;
   const isSelected = el.id === selectedId;
   const className = `${el.props?.className ?? ""} ${
-    isSelected ? "ring-2 ring-blue-500 ring-offset-2" : ""
+    isSelected ? "ring-2 ring-primary/70 ring-offset-2" : ""
   }`.trim();
   const children = el.children?.map((c, i) => (
     <span key={`${c.id}-${i}`}>{renderNode(c, selectedId, setSelectedId)}</span>
@@ -239,7 +263,9 @@ function CommonStyleControls({
     backgroundColor: string;
     fontSize: number | string;
     fontWeight: number | string;
+    fontFamily: string;
   }>;
+
   return (
     <div className="grid grid-cols-2 gap-3">
       <div className="col-span-2">
@@ -292,6 +318,29 @@ function CommonStyleControls({
             })
           }
         />
+      </div>
+      <div>
+        <label className="block text-xs mb-1 text-muted-foreground">Font Family</label>
+        <Select
+          value={String(style.fontFamily ?? "")}
+          onValueChange={(val) =>
+            onChange({
+              ...node,
+              style: { ...style, fontFamily: val || undefined } as unknown as ElementNode["style"],
+            })
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Choose font" />
+          </SelectTrigger>
+          <SelectContent>
+            {FONT_OPTIONS.map((opt) => (
+              <SelectItem key={opt.label} value={String(opt.value)}>
+                <span style={{ fontFamily: opt.value || undefined }}>{opt.label}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div>
         <label className="block text-xs mb-1 text-muted-foreground">Bold</label>

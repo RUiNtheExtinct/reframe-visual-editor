@@ -8,6 +8,7 @@ export const components = pgTable("components", {
     .notNull(),
   name: text("name"),
   source: text("source"),
+  description: text("description"),
   tree: jsonb("tree").notNull(),
   createdAt: timestamp("created_at", { withTimezone: false }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: false }).defaultNow().notNull(),

@@ -9,6 +9,7 @@ export type TextNode = {
     backgroundColor: string;
     fontSize: number; // px
     fontWeight: number | string; // 400 | 700 | "bold"
+    fontFamily: string;
   }>;
 };
 
@@ -25,6 +26,7 @@ export type ElementNode = {
     fontSize: number; // px
     fontWeight: number | string; // 400 | 700 | "bold"
     padding: number; // px
+    fontFamily: string;
   }>;
   children: EditorNode[];
 };
@@ -39,6 +41,7 @@ export type StoredComponent = {
   componentId: string;
   name?: string;
   source?: string; // original source the user pasted (optional)
+  description?: string;
   tree: ComponentTree;
   createdAt: string;
   updatedAt: string;
