@@ -7,9 +7,10 @@ type Props = {
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
+  onShadowRootReady?: (root: ShadowRoot | null) => void;
 };
 
-export default function PreviewSurface({ children, className, style }: Props) {
+export default function PreviewSurface({ children, className, style, onShadowRootReady }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [shadowRoot, setShadowRoot] = useState<ShadowRoot | null>(null);
   const [mountNode, setMountNode] = useState<HTMLDivElement | null>(null);
@@ -22,6 +23,9 @@ export default function PreviewSurface({ children, className, style }: Props) {
       root = host.attachShadow({ mode: "open" });
     }
     setShadowRoot(root);
+    try {
+      onShadowRootReady?.(root);
+    } catch {}
     let mount = root.querySelector(':scope > div[data-preview-mount="1"]') as HTMLDivElement | null;
     if (!mount) {
       mount = document.createElement("div");
@@ -88,6 +92,9 @@ export default function PreviewSurface({ children, className, style }: Props) {
         disconnect?.();
       } finally {
         setMountNode(null);
+        try {
+          onShadowRootReady?.(null);
+        } catch {}
       }
     };
   }, []);

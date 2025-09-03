@@ -44,18 +44,57 @@ export default function WebsiteEditor({
   const [code, setCode] = useState<string>(serializeTreeToSource(tree, name));
   const lastChangeSourceRef = useRef<"ui" | "code" | null>(null);
   const [codeInstanceKey, setCodeInstanceKey] = useState(0);
+  const previewShadowRootRef = useRef<ShadowRoot | null>(null);
+  const initialHydratedRef = useRef<boolean>(false);
   const selectedNode = useMemo(
     () => (selectedId ? findNode(currentTree.root, selectedId) : null),
     [currentTree, selectedId]
   );
 
   useEffect(() => setCurrentTree(tree), [tree]);
+  useEffect(() => {
+    initialHydratedRef.current = false;
+  }, [tree]);
   // Keep code in sync when not actively editing code
   useEffect(() => {
     if (activeTab !== "code") {
       setCode(serializeTreeToSource(currentTree, name));
     }
   }, [currentTree, name, activeTab]);
+
+  // Hydrate missing style values from computed styles (one-time per load)
+  useEffect(() => {
+    if (activeTab !== "design") return;
+    const root = previewShadowRootRef.current;
+    if (!root) return;
+    if (initialHydratedRef.current) return;
+
+    let frame = 0;
+    let rafId: number | null = null;
+    const tick = () => {
+      const ready = (root as any).__twindReady === true;
+      if (!ready && frame < 30) {
+        frame += 1;
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+      try {
+        setCurrentTree((prev) => {
+          const nextRoot = hydrateStylesFromDom(prev.root, root);
+          if (nextRoot === prev.root) return prev;
+          lastChangeSourceRef.current = "ui";
+          initialHydratedRef.current = true;
+          return { root: nextRoot };
+        });
+      } catch {
+        // ignore
+      }
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [activeTab, currentTree]);
 
   // When switching to Code tab, refresh code from current tree to reflect latest UI edits
   useEffect(() => {
@@ -173,7 +212,7 @@ export default function WebsiteEditor({
         </div>
         <div className="rounded-lg border bg-background p-0 transition-colors">
           {activeTab === "design" ? (
-            <PreviewSurface>
+            <PreviewSurface onShadowRootReady={(r) => (previewShadowRootRef.current = r)}>
               <div className="p-6 min-h-[520px]">
                 <div className="text-xs text-muted-foreground mb-2">Click elements to edit</div>
                 {renderNode(currentTree.root, selectedId, setSelectedId)}
@@ -285,6 +324,7 @@ function renderNode(
     return (
       <span
         key={node.id}
+        data-node-id={node.id}
         onClick={(e) => {
           e.stopPropagation();
           setSelectedId(node.id);
@@ -310,6 +350,7 @@ function renderNode(
   const props: Record<string, unknown> & {
     onClick: React.MouseEventHandler;
   } = {
+    "data-node-id": el.id,
     className,
     style: convertStyle(el.style),
     onClick: (e) => {
@@ -507,6 +548,77 @@ function convertStyle(
   const fs = (style as { fontSize?: unknown }).fontSize;
   if (typeof fs === "number") outStyle.fontSize = `${fs}px`;
   return outStyle;
+}
+
+function hydrateStylesFromDom(node: EditorNode, root: ShadowRoot): EditorNode {
+  const extractHexFromColor = (value: string): string | null => {
+    if (!value) return null;
+    if (value.toLowerCase() === "transparent") return null;
+    const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hex) {
+      return value.length === 4
+        ? `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`
+        : value.toLowerCase();
+    }
+    const rgba = value.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    if (rgba) {
+      const toHex = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, "0");
+      const r = parseInt(rgba[1], 10);
+      const g = parseInt(rgba[2], 10);
+      const b = parseInt(rgba[3], 10);
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    }
+    return null;
+  };
+
+  const query = (id: string): HTMLElement | null =>
+    root.querySelector(`[data-node-id="${CSS.escape(id)}"]`) as HTMLElement | null;
+
+  const visit = (n: EditorNode): EditorNode => {
+    const el = query(n.id);
+    let changed = false;
+    if (el) {
+      const cs = getComputedStyle(el);
+      const nextStyle: any = { ...(n.style ?? {}) };
+      if (nextStyle.color === undefined && cs.color) {
+        const hex = extractHexFromColor(cs.color);
+        if (hex) {
+          nextStyle.color = hex;
+          changed = true;
+        }
+      }
+      if (nextStyle.fontSize === undefined && cs.fontSize) {
+        const px = parseInt(cs.fontSize, 10);
+        if (!Number.isNaN(px)) {
+          nextStyle.fontSize = px;
+          changed = true;
+        }
+      }
+      if (nextStyle.fontWeight === undefined && cs.fontWeight) {
+        const fw = parseInt(cs.fontWeight, 10);
+        nextStyle.fontWeight = Number.isNaN(fw) ? cs.fontWeight : fw;
+        changed = true;
+      }
+      if (nextStyle.fontFamily === undefined && cs.fontFamily) {
+        const first = cs.fontFamily.split(",")[0]?.trim().replace(/^"|"$/g, "");
+        if (first) {
+          nextStyle.fontFamily = first;
+          changed = true;
+        }
+      }
+      if (changed) n = { ...(n as any), style: nextStyle } as EditorNode;
+    }
+
+    if (n.type === "element") {
+      const children = n.children.map((c) => visit(c));
+      if (children.some((c, i) => c !== n.children[i])) {
+        return { ...(n as ElementNode), children } as ElementNode;
+      }
+    }
+    return n;
+  };
+
+  return visit(node);
 }
 
 function findNode(node: EditorNode, id: string): EditorNode | null {
