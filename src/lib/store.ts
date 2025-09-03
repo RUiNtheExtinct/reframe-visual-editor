@@ -130,3 +130,15 @@ export async function listComponentsPaginated(
   }));
   return { items, total, page, pageSize };
 }
+
+export async function deleteComponent(componentId: string): Promise<boolean> {
+  try {
+    const drizzle = getDb();
+    if (!drizzle) throw new Error("Database not configured. Set DATABASE_URL.");
+    await drizzle.delete(components).where(eq(components.componentId, componentId));
+    return true;
+  } catch (error) {
+    console.error("Error deleting component", error);
+    return false;
+  }
+}

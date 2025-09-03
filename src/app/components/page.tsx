@@ -1,3 +1,4 @@
+import DeleteComponentButton from "@/components/DeleteComponentButton";
 import { listComponentsPaginated } from "@/lib/store";
 import Link from "next/link";
 
@@ -41,9 +42,12 @@ export default async function ComponentsPage({
                 <div className="text-xs text-muted-foreground truncate">{c.description}</div>
               )}
             </div>
-            <Link className="text-sm underline" href={`/preview/${c.componentId}`}>
-              Open
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link className="text-sm underline" href={`/preview/${c.componentId}`}>
+                Open
+              </Link>
+              <DeleteComponentButton componentId={c.componentId} />
+            </div>
           </li>
         ))}
       </ul>

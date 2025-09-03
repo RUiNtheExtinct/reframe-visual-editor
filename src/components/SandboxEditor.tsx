@@ -2,12 +2,6 @@
 
 import CodeEditor from "@/components/CodeEditor";
 import PreviewSurface from "@/components/PreviewSurface";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -18,12 +12,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FONT_OPTIONS } from "@/constants";
 import { api } from "@/lib/api";
 import { parseJsxToTree } from "@/lib/serializer";
 import { useMutation } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Clipboard, Code2, Eye } from "lucide-react";
+import { Clipboard, Code2, Copy, Eye, Redo2, Trash2, Undo2 } from "lucide-react";
 import * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -70,11 +65,55 @@ export default function SandboxEditor({
   const [selectedRect, setSelectedRect] = useState<DOMRect | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const overridesRef = useRef<Overrides>({});
+  const [history, setHistory] = useState<Overrides[]>([]);
+  const [future, setFuture] = useState<Overrides[]>([]);
 
   // Parse overrides embedded in code
   useEffect(() => {
     overridesRef.current = extractOverrides(code);
   }, []);
+
+  const cloneOverrides = useCallback((src: Overrides): Overrides => {
+    try {
+      return JSON.parse(JSON.stringify(src || {}));
+    } catch {
+      return {};
+    }
+  }, []);
+
+  const pushHistory = useCallback(() => {
+    setHistory((prev) => [...prev, cloneOverrides(overridesRef.current)]);
+    setFuture([]);
+  }, [cloneOverrides]);
+
+  const applySnapshot = useCallback(
+    (snap: Overrides) => {
+      overridesRef.current = cloneOverrides(snap);
+      setOverridesRevision((r) => r + 1);
+      setPreviewRevision((r) => r + 1);
+    },
+    [cloneOverrides]
+  );
+
+  const undo = useCallback(() => {
+    setHistory((prev) => {
+      if (!prev.length) return prev;
+      const last = prev[prev.length - 1];
+      setFuture((f) => [cloneOverrides(overridesRef.current), ...f]);
+      applySnapshot(last);
+      return prev.slice(0, -1);
+    });
+  }, [applySnapshot, cloneOverrides]);
+
+  const redo = useCallback(() => {
+    setFuture((prev) => {
+      if (!prev.length) return prev;
+      const next = prev[0];
+      setHistory((h) => [...h, cloneOverrides(overridesRef.current)]);
+      applySnapshot(next);
+      return prev.slice(1);
+    });
+  }, [applySnapshot, cloneOverrides]);
 
   // Save mutations
   const updateMutation = useMutation({
@@ -204,6 +243,7 @@ export default function SandboxEditor({
       const root = shadowRootRef.current;
       const el = root.querySelector(selectedSelector) as HTMLElement | null;
       if (!el) return;
+      pushHistory();
       el.textContent = text;
       overridesRef.current = {
         ...overridesRef.current,
@@ -213,7 +253,7 @@ export default function SandboxEditor({
       setPreviewRevision((r) => r + 1);
       setOverridesRevision((r) => r + 1);
     },
-    [selectedSelector]
+    [selectedSelector, pushHistory]
   );
 
   const applyStyleChange = useCallback(
@@ -223,6 +263,7 @@ export default function SandboxEditor({
       const el = root.querySelector(selectedSelector) as HTMLElement | null;
       if (!el) return;
       try {
+        pushHistory();
         (el.style as any)[styleKey] =
           typeof value === "number" && PIXEL_STYLES.has(styleKey) ? `${value}px` : (value as any);
       } catch {}
@@ -237,7 +278,7 @@ export default function SandboxEditor({
       setPreviewRevision((r) => r + 1);
       setOverridesRevision((r) => r + 1);
     },
-    [selectedSelector]
+    [selectedSelector, pushHistory]
   );
 
   const selectedText = useMemo(() => {
@@ -251,8 +292,28 @@ export default function SandboxEditor({
     return base as Record<string, string | number>;
   }, [selectedSelector, overridesRef.current, previewRevision]);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (activeTab !== "ui") return;
+      const isMac = navigator.platform.toLowerCase().includes("mac");
+      const mod = isMac ? e.metaKey : e.ctrlKey;
+      if (mod && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        undo();
+      } else if (
+        (mod && e.shiftKey && (e.key === "z" || e.key === "Z")) ||
+        (mod && (e.key === "y" || e.key === "Y"))
+      ) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeTab, undo, redo]);
+
   return (
-    <div className="grid grid-cols-12 gap-4">
+    <div className="grid grid-cols-12 gap-4 items-start">
       <div className="col-span-12 xl:col-span-8 space-y-3">
         <div className="flex items-center justify-between">
           <div className="inline-flex items-center gap-2 rounded-md border bg-card px-2 py-1">
@@ -271,7 +332,7 @@ export default function SandboxEditor({
                 }`}
                 onClick={() => setActiveTab("ui")}
               >
-                <Eye className="h-3.5 w-3.5" /> UI
+                <Eye className="h-4 w-4" /> UI
               </button>
               <button
                 className={`px-3 py-1.5 text-xs rounded-[6px] inline-flex items-center gap-1 ${
@@ -281,19 +342,18 @@ export default function SandboxEditor({
                 }`}
                 onClick={() => setActiveTab("code")}
               >
-                <Code2 className="h-3.5 w-3.5" /> Code
+                <Code2 className="h-4 w-4" /> Code
               </button>
             </div>
             <Button
               variant="outline"
-              size="sm"
               className="inline-flex items-center gap-1"
               onClick={async () => {
                 await navigator.clipboard.writeText(code);
                 toast.success("Copied TSX");
               }}
             >
-              <Clipboard className="h-3.5 w-3.5" /> Copy TSX
+              <Clipboard className="h-4 w-4" /> Copy TSX
             </Button>
           </div>
         </div>
@@ -316,7 +376,7 @@ export default function SandboxEditor({
             </div>
             <div ref={containerRef} className="relative">
               <PreviewSurface onShadowRootReady={(r) => (shadowRootRef.current = r)}>
-                <div key={previewKey} className="p-6 min-h-[520px]">
+                <div key={previewKey} className="p-6 min-h-[640px]">
                   {/* Inject overrides style tag */}
                   <style suppressHydrationWarning>{renderOverridesCss(overridesRef.current)}</style>
                   {Component ? (
@@ -345,6 +405,100 @@ export default function SandboxEditor({
                 />
               )}
             </div>
+            {/* In-preview actions */}
+            {selectedSelector && (
+              <div className="flex items-center justify-between gap-2 border-t px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={undo}
+                    disabled={!history.length}
+                    className="inline-flex items-center gap-1"
+                  >
+                    <Undo2 className="h-4 w-4" /> Undo
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={redo}
+                    disabled={!future.length}
+                    className="inline-flex items-center gap-1"
+                  >
+                    <Redo2 className="h-4 w-4" /> Redo
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    className="inline-flex items-center gap-1"
+                    onClick={() => {
+                      const el = shadowRootRef.current?.querySelector(
+                        selectedSelector
+                      ) as HTMLElement | null;
+                      if (!el) return;
+                      try {
+                        const html = el.outerHTML || "";
+                        navigator.clipboard.writeText(html);
+                        toast.success("Copied node HTML");
+                      } catch {
+                        toast.error("Copy failed");
+                      }
+                    }}
+                  >
+                    <Copy className="h-4 w-4" /> Copy node
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="inline-flex items-center gap-1"
+                    onClick={() => {
+                      const root = shadowRootRef.current;
+                      if (!root || !selectedSelector) return;
+                      const el = root.querySelector(selectedSelector) as HTMLElement | null;
+                      if (!el || !el.parentElement) return;
+                      try {
+                        pushHistory();
+                        const clone = el.cloneNode(true) as HTMLElement;
+                        el.parentElement.insertBefore(clone, el.nextSibling);
+                        const selector = buildUniqueSelector(clone, root as any);
+                        const src = overridesRef.current[selectedSelector];
+                        if (src) {
+                          overridesRef.current = {
+                            ...overridesRef.current,
+                            [selector]: JSON.parse(JSON.stringify(src)),
+                          };
+                        }
+                        setSelectedSelector(selector);
+                        setSelectedRect(clone.getBoundingClientRect());
+                        setPreviewRevision((r) => r + 1);
+                        setOverridesRevision((r) => r + 1);
+                        toast.success("Duplicated node");
+                      } catch {
+                        toast.error("Duplicate failed");
+                      }
+                    }}
+                  >
+                    <Copy className="h-4 w-4" /> Duplicate
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="inline-flex items-center gap-1"
+                    onClick={() => {
+                      const el = shadowRootRef.current?.querySelector(
+                        selectedSelector
+                      ) as HTMLElement | null;
+                      if (el) {
+                        try {
+                          pushHistory();
+                          el.style.display = "none";
+                        } catch {}
+                      }
+                      applyStyleChange("display", "none");
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" /> Delete
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -378,226 +532,234 @@ export default function SandboxEditor({
                   readOnly
                 />
               </div>
-              <div>
-                <label className="block text-xs text-foreground/70 mb-1">Text</label>
-                <input
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  value={selectedText}
-                  onChange={(e) => applyTextChange(e.target.value)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-foreground/70 mb-1">Text Color</label>
-                    <ColorInputRow
-                      value={ensureColor(selectedStyle["color"] as string | undefined)}
-                      onChange={(c) => applyStyleChange("color", c)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-foreground/70 mb-1">
-                      Background Color
-                    </label>
-                    <ColorInputRow
-                      value={ensureColor(selectedStyle["backgroundColor"] as string | undefined)}
-                      onChange={(c) => applyStyleChange("backgroundColor", c)}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-foreground/70 mb-1">Font Size (px)</label>
-                  <input
-                    type="number"
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    value={Number(selectedStyle["fontSize"] ?? 16)}
-                    onChange={(e) => applyStyleChange("fontSize", Number(e.target.value || 0))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-foreground/70 mb-1">Padding (px)</label>
-                  <input
-                    type="number"
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    value={Number((selectedStyle as any)["padding"] ?? 0)}
-                    onChange={(e) => applyStyleChange("padding", Number(e.target.value || 0))}
-                  />
-                </div>
-              </div>
-
-              {/* Typography */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-foreground/70 mb-1">Font Family</label>
-                  <Select
-                    value={(selectedStyle["fontFamily"] as string) || "default"}
-                    onValueChange={(val) =>
-                      applyStyleChange("fontFamily", val === "default" ? "" : val)
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose font" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {FONT_OPTIONS.map((opt) => (
-                        <SelectItem
-                          key={opt.label}
-                          value={opt.value === "default" ? "default" : opt.value}
-                        >
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end gap-2">
-                  <button
-                    className={`rounded-md w-fit border px-4 py-2 text-sm ${selectedStyle["fontStyle"] === "italic" ? "bg-foreground text-background" : ""}`}
-                    onClick={() =>
-                      applyStyleChange(
-                        "fontStyle",
-                        selectedStyle["fontStyle"] === "italic" ? "normal" : "italic"
-                      )
-                    }
-                  >
-                    Italic
-                  </button>
-                  <div className="w-full">
-                    <label className="block text-xs text-foreground/70 mb-1">Weight</label>
-                    <Select
-                      value={String(selectedStyle["fontWeight"] ?? 400)}
-                      onValueChange={(val) => applyStyleChange("fontWeight", Number(val))}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[100, 200, 300, 400, 500, 600, 700, 800, 900].map((w) => (
-                          <SelectItem key={w} value={String(w)}>
-                            {w}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-
-              {/* More options */}
-              <Accordion type="single" collapsible>
-                <AccordionItem value="more">
-                  <AccordionTrigger className="px-3">More options</AccordionTrigger>
-                  <AccordionContent>
-                    <div className="px-3 pb-3 pt-1 grid grid-cols-2 gap-3">
+              {/* Inspector Tabs: Formatting, Borders, Gradients */}
+              <Tabs defaultValue="formatting">
+                <TabsList className="w-full grid grid-cols-3">
+                  <TabsTrigger value="formatting">Formatting</TabsTrigger>
+                  <TabsTrigger value="borders">Borders</TabsTrigger>
+                  <TabsTrigger value="gradients">Gradients</TabsTrigger>
+                </TabsList>
+                <TabsContent value="formatting">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-foreground/70 mb-1">Text</label>
+                      <input
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        value={selectedText}
+                        onChange={(e) => applyTextChange(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2 grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs text-foreground/70 mb-1">
+                            Text Color
+                          </label>
+                          <ColorInputRow
+                            value={ensureColor(selectedStyle["color"] as string | undefined)}
+                            onChange={(c) => applyStyleChange("color", c)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-foreground/70 mb-1">
+                            Background Color
+                          </label>
+                          <ColorInputRow
+                            value={ensureColor(
+                              selectedStyle["backgroundColor"] as string | undefined
+                            )}
+                            onChange={(c) => applyStyleChange("backgroundColor", c)}
+                          />
+                        </div>
+                      </div>
                       <div>
                         <label className="block text-xs text-foreground/70 mb-1">
-                          Border Style
+                          Font Size (px)
                         </label>
+                        <input
+                          type="number"
+                          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                          value={Number(selectedStyle["fontSize"] ?? 16)}
+                          onChange={(e) =>
+                            applyStyleChange("fontSize", Number(e.target.value || 0))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-foreground/70 mb-1">
+                          Padding (px)
+                        </label>
+                        <input
+                          type="number"
+                          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                          value={Number((selectedStyle as any)["padding"] ?? 0)}
+                          onChange={(e) => applyStyleChange("padding", Number(e.target.value || 0))}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-foreground/70 mb-1">Font Family</label>
                         <Select
-                          value={(selectedStyle["borderStyle"] as string) || "none"}
+                          value={(selectedStyle["fontFamily"] as string) || "default"}
                           onValueChange={(val) =>
-                            applyStyleChange("borderStyle", val === "none" ? "" : val)
+                            applyStyleChange("fontFamily", val === "default" ? "" : val)
                           }
                         >
                           <SelectTrigger className="w-full">
-                            <SelectValue />
+                            <SelectValue placeholder="Choose font" />
                           </SelectTrigger>
                           <SelectContent>
-                            {["none", "solid", "dashed", "dotted", "double"].map((s) => (
-                              <SelectItem key={s} value={s}>
-                                {s}
+                            {FONT_OPTIONS.map((opt) => (
+                              <SelectItem
+                                key={opt.label}
+                                value={opt.value === "default" ? "default" : opt.value}
+                              >
+                                {opt.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
-                      <div>
-                        <label className="block text-xs text-foreground/70 mb-1">
-                          Border Width (px)
-                        </label>
-                        <input
-                          type="number"
-                          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                          value={Number((selectedStyle as any)["borderWidth"] ?? 0)}
-                          onChange={(e) =>
-                            applyStyleChange("borderWidth", Number(e.target.value || 0))
+                      <div className="flex items-end gap-2">
+                        <button
+                          className={`rounded-md w-fit border px-4 py-2 text-sm ${selectedStyle["fontStyle"] === "italic" ? "bg-foreground text-background" : ""}`}
+                          onClick={() =>
+                            applyStyleChange(
+                              "fontStyle",
+                              selectedStyle["fontStyle"] === "italic" ? "normal" : "italic"
+                            )
                           }
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-foreground/70 mb-1">
-                          Border Radius (px)
-                        </label>
-                        <input
-                          type="number"
-                          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                          value={Number((selectedStyle as any)["borderRadius"] ?? 0)}
-                          onChange={(e) =>
-                            applyStyleChange("borderRadius", Number(e.target.value || 0))
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-foreground/70 mb-1">
-                          Border Color
-                        </label>
-                        <ColorInputRow
-                          value={ensureColor(
-                            (selectedStyle as any)["borderColor"] as string | undefined
-                          )}
-                          onChange={(c) => applyStyleChange("borderColor", c)}
-                        />
+                        >
+                          Italic
+                        </button>
+                        <div className="w-full">
+                          <label className="block text-xs text-foreground/70 mb-1">Weight</label>
+                          <Select
+                            value={String(selectedStyle["fontWeight"] ?? 400)}
+                            onValueChange={(val) => applyStyleChange("fontWeight", Number(val))}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[100, 200, 300, 400, 500, 600, 700, 800, 900].map((w) => (
+                                <SelectItem key={w} value={String(w)}>
+                                  {w}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="px-3 pb-3 pt-1 space-y-4">
-                      <div className="space-y-2">
-                        <div className="text-xs font-semibold text-foreground/70">
-                          Text Gradient
-                        </div>
-                        <GradientControls
-                          current={(selectedStyle as any)["backgroundImage"] as string | undefined}
-                          onChange={(g) => {
-                            const bi = (selectedStyle as any)["backgroundImage"] as
-                              | string
-                              | undefined;
-                            const parts = (bi && bi.match(/linear-gradient\([^\)]*\)/g)) || [];
-                            const bg = parts.length >= 2 ? parts[0] : undefined;
-                            const layers: string[] = [];
-                            if (bg) layers.push(bg);
-                            if (g) layers.push(g);
-                            applyStyleChange("backgroundImage", layers.join(", "));
-                            applyStyleChange("WebkitBackgroundClip", g ? "text" : "");
-                            applyStyleChange("WebkitTextFillColor", g ? "transparent" : "");
-                          }}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <div className="text-xs font-semibold text-foreground/70">
-                          Background Gradient
-                        </div>
-                        <GradientControls
-                          current={(selectedStyle as any)["backgroundImage"] as string | undefined}
-                          onChange={(g) => {
-                            const bi = (selectedStyle as any)["backgroundImage"] as
-                              | string
-                              | undefined;
-                            const parts = (bi && bi.match(/linear-gradient\([^\)]*\)/g)) || [];
-                            const text = parts.length >= 2 ? parts[1] : undefined;
-                            const layers: string[] = [];
-                            if (g) layers.push(g);
-                            if (text) layers.push(text);
-                            applyStyleChange("backgroundImage", layers.join(", "));
-                            applyStyleChange("WebkitBackgroundClip", text ? "text" : "");
-                            applyStyleChange("WebkitTextFillColor", text ? "transparent" : "");
-                            if (g) applyStyleChange("backgroundColor", "");
-                          }}
-                        />
-                      </div>
+                  </div>
+                </TabsContent>
+                <TabsContent value="borders">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-foreground/70 mb-1">Border Style</label>
+                      <Select
+                        value={(selectedStyle["borderStyle"] as string) || "none"}
+                        onValueChange={(val) =>
+                          applyStyleChange("borderStyle", val === "none" ? "" : val)
+                        }
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {["none", "solid", "dashed", "dotted", "double"].map((s) => (
+                            <SelectItem key={s} value={s}>
+                              {s}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
+                    <div>
+                      <label className="block text-xs text-foreground/70 mb-1">
+                        Border Width (px)
+                      </label>
+                      <input
+                        type="number"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        value={Number((selectedStyle as any)["borderWidth"] ?? 0)}
+                        onChange={(e) =>
+                          applyStyleChange("borderWidth", Number(e.target.value || 0))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-foreground/70 mb-1">
+                        Border Radius (px)
+                      </label>
+                      <input
+                        type="number"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        value={Number((selectedStyle as any)["borderRadius"] ?? 0)}
+                        onChange={(e) =>
+                          applyStyleChange("borderRadius", Number(e.target.value || 0))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-foreground/70 mb-1">Border Color</label>
+                      <ColorInputRow
+                        value={ensureColor(
+                          (selectedStyle as any)["borderColor"] as string | undefined
+                        )}
+                        onChange={(c) => applyStyleChange("borderColor", c)}
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
+                <TabsContent value="gradients">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-foreground/70">Text Gradient</div>
+                      <GradientControls
+                        current={(selectedStyle as any)["backgroundImage"] as string | undefined}
+                        onChange={(g) => {
+                          const bi = (selectedStyle as any)["backgroundImage"] as
+                            | string
+                            | undefined;
+                          const parts = (bi && bi.match(/linear-gradient\([^\)]*\)/g)) || [];
+                          const bg = parts.length >= 2 ? parts[0] : undefined;
+                          const layers: string[] = [];
+                          if (bg) layers.push(bg);
+                          if (g) layers.push(g);
+                          applyStyleChange("backgroundImage", layers.join(", "));
+                          applyStyleChange("WebkitBackgroundClip", g ? "text" : "");
+                          applyStyleChange("WebkitTextFillColor", g ? "transparent" : "");
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-foreground/70">
+                        Background Gradient
+                      </div>
+                      <GradientControls
+                        current={(selectedStyle as any)["backgroundImage"] as string | undefined}
+                        onChange={(g) => {
+                          const bi = (selectedStyle as any)["backgroundImage"] as
+                            | string
+                            | undefined;
+                          const parts = (bi && bi.match(/linear-gradient\([^\)]*\)/g)) || [];
+                          const text = parts.length >= 2 ? parts[1] : undefined;
+                          const layers: string[] = [];
+                          if (g) layers.push(g);
+                          if (text) layers.push(text);
+                          applyStyleChange("backgroundImage", layers.join(", "));
+                          applyStyleChange("WebkitBackgroundClip", text ? "text" : "");
+                          applyStyleChange("WebkitTextFillColor", text ? "transparent" : "");
+                          if (g) applyStyleChange("backgroundColor", "");
+                        }}
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
             </div>
           ) : (
             <p className="text-sm text-foreground/70">
@@ -849,7 +1011,10 @@ function GradientControls({
   }, [enabled, angle, stop, start, end]);
 
   return (
-    <div className="rounded-md border p-3 bg-background space-y-3">
+    <div
+      className="rounded-md border p-3 bg-background space-y-3"
+      onClick={() => !enabled && setEnabled(!enabled)}
+    >
       <div className="flex items-center gap-2">
         <Checkbox
           checked={enabled}
@@ -859,7 +1024,9 @@ function GradientControls({
             if (!next) onChange(null);
           }}
         />
-        <span className="text-xs text-foreground/70">Enable</span>
+        <span className="text-xs text-foreground/70" onClick={() => setEnabled(!enabled)}>
+          Enable
+        </span>
       </div>
       {enabled && (
         <div className="grid grid-cols-2 gap-4">
