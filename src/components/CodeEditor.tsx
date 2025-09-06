@@ -80,11 +80,6 @@ export default function CodeEditor({
   );
 }
 
-function isDark(): boolean {
-  if (typeof document === "undefined") return false;
-  return document.documentElement.classList.contains("dark");
-}
-
 function configureMonaco(monaco: any) {
   const common: any = {
     jsx: monaco.languages.typescript.JsxEmit.ReactJSX,

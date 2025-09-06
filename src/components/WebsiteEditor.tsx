@@ -1,3 +1,4 @@
+/* eslint-disable  @typescript-eslint/no-explicit-any */
 "use client";
 
 import CodeEditor from "@/components/CodeEditor";
@@ -9,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FONT_OPTIONS } from "@/constants";
 import type { ComponentTree, EditorNode, ElementNode, TextNode } from "@/lib/editorTypes";
 import { parseJsxToTree, serializeTreeToSource } from "@/lib/serializer";
@@ -46,6 +48,8 @@ export default function WebsiteEditor({
   const [codeInstanceKey, setCodeInstanceKey] = useState(0);
   const previewShadowRootRef = useRef<ShadowRoot | null>(null);
   const initialHydratedRef = useRef<boolean>(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [selectedRect, setSelectedRect] = useState<DOMRect | null>(null);
   const selectedNode = useMemo(
     () => (selectedId ? findNode(currentTree.root, selectedId) : null),
     [currentTree, selectedId]
@@ -95,6 +99,34 @@ export default function WebsiteEditor({
       if (rafId) cancelAnimationFrame(rafId);
     };
   }, [activeTab, currentTree]);
+
+  // Track selected element rect for overlay
+  useEffect(() => {
+    if (activeTab !== "design") return;
+    const root = previewShadowRootRef.current;
+    if (!root || !selectedId) {
+      setSelectedRect(null);
+      return;
+    }
+    const el = root.querySelector(
+      `[data-node-id="${CSS.escape(selectedId)}"]`
+    ) as HTMLElement | null;
+    setSelectedRect(el ? el.getBoundingClientRect() : null);
+  }, [selectedId, currentTree, activeTab]);
+
+  useEffect(() => {
+    const onResize = () => {
+      if (activeTab !== "design") return;
+      const root = previewShadowRootRef.current;
+      if (!root || !selectedId) return;
+      const el = root.querySelector(
+        `[data-node-id="${CSS.escape(selectedId)}"]`
+      ) as HTMLElement | null;
+      setSelectedRect(el ? el.getBoundingClientRect() : null);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [selectedId, activeTab]);
 
   // When switching to Code tab, refresh code from current tree to reflect latest UI edits
   useEffect(() => {
@@ -210,7 +242,7 @@ export default function WebsiteEditor({
             </Button>
           </div>
         </div>
-        <div className="rounded-lg border bg-background p-0 transition-colors">
+        <div className="rounded-lg border bg-background p-0 transition-colors" ref={containerRef}>
           {activeTab === "design" ? (
             <PreviewSurface onShadowRootReady={(r) => (previewShadowRootRef.current = r)}>
               <div className="p-6 min-h-[520px]">
@@ -227,6 +259,68 @@ export default function WebsiteEditor({
                 instanceKey={codeInstanceKey}
               />
             </div>
+          )}
+          {activeTab === "design" && selectedRect && selectedId && (
+            <ResizeOverlay
+              rect={selectedRect}
+              container={containerRef.current}
+              colorClass="ring-primary/70"
+              onResizeStart={() => {}}
+              onResize={(nextW, nextH) => {
+                if (!selectedId) return;
+                updateNode(selectedId, (node) => {
+                  const style: any = { ...(node.style ?? {}) };
+                  if (typeof nextW === "number") style.width = Math.max(1, Math.round(nextW));
+                  if (typeof nextH === "number") style.height = Math.max(1, Math.round(nextH));
+                  return { ...node, style } as any;
+                });
+                const root = previewShadowRootRef.current;
+                const el = root?.querySelector(
+                  `[data-node-id="${CSS.escape(selectedId)}"]`
+                ) as HTMLElement | null;
+                if (el) setSelectedRect(el.getBoundingClientRect());
+              }}
+              onResizeEnd={() => {}}
+              onDragStart={() => {}}
+              onDrag={(dx, dy) => {
+                if (!selectedId) return;
+                updateNode(selectedId, (node) => {
+                  const style: any = { ...(node.style ?? {}) };
+                  style.marginLeft = Math.round(Number(style.marginLeft || 0) + dx);
+                  style.marginTop = Math.round(Number(style.marginTop || 0) + dy);
+                  return { ...node, style } as any;
+                });
+                const root = previewShadowRootRef.current;
+                const el = root?.querySelector(
+                  `[data-node-id="${CSS.escape(selectedId)}"]`
+                ) as HTMLElement | null;
+                if (el) setSelectedRect(el.getBoundingClientRect());
+              }}
+              onDragEnd={() => {}}
+              onRotateStart={() => {}}
+              onRotate={(ang) => {
+                if (!selectedId) return;
+                updateNode(selectedId, (node) => {
+                  const style: any = { ...(node.style ?? {}) };
+                  style.transform = `rotate(${Math.round(ang)}deg)`;
+                  return { ...node, style } as any;
+                });
+                const root = previewShadowRootRef.current;
+                const el = root?.querySelector(
+                  `[data-node-id="${CSS.escape(selectedId)}"]`
+                ) as HTMLElement | null;
+                if (el) setSelectedRect(el.getBoundingClientRect());
+              }}
+              onRotateEnd={() => {}}
+              requestFreshRect={() => {
+                const root = previewShadowRootRef.current;
+                if (!root || !selectedId) return null;
+                const el = root.querySelector(
+                  `[data-node-id="${CSS.escape(selectedId)}"]`
+                ) as HTMLElement | null;
+                return el ? el.getBoundingClientRect() : null;
+              }}
+            />
           )}
         </div>
       </div>
@@ -366,33 +460,61 @@ function NodeControls({ node, onChange }: { node: EditorNode; onChange: (n: Edit
   if (node.type === "text") {
     const n = node as TextNode;
     return (
-      <div className="space-y-4">
-        <div>
-          <label className="block text-xs mb-1 text-muted-foreground">Text</label>
-          <input
-            className="w-full rounded-md border px-3 py-2 bg-background"
-            value={n.text}
-            onChange={(e) => onChange({ ...n, text: e.target.value })}
-          />
-        </div>
-        <CommonStyleControls node={n} onChange={onChange} />
-      </div>
+      <Tabs defaultValue="content">
+        <TabsList className="w-full grid grid-cols-3">
+          <TabsTrigger value="content">Content</TabsTrigger>
+          <TabsTrigger value="style">Style</TabsTrigger>
+          <TabsTrigger value="layout">Layout</TabsTrigger>
+        </TabsList>
+        <TabsContent value="content">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs mb-1 text-muted-foreground">Text</label>
+              <input
+                className="w-full rounded-md border px-3 py-2 bg-background"
+                value={n.text}
+                onChange={(e) => onChange({ ...n, text: e.target.value })}
+              />
+            </div>
+          </div>
+        </TabsContent>
+        <TabsContent value="style">
+          <CommonStyleControls node={n} onChange={onChange} />
+        </TabsContent>
+        <TabsContent value="layout">
+          <LayoutControls node={n} onChange={onChange} />
+        </TabsContent>
+      </Tabs>
     );
   }
 
   const n = node as ElementNode;
   return (
-    <div className="space-y-4">
-      <div>
-        <label className="block text-xs mb-1 text-muted-foreground">Tag</label>
-        <input
-          className="w-full rounded-md border px-3 py-2 bg-background"
-          value={n.tag}
-          onChange={(e) => onChange({ ...n, tag: e.target.value })}
-        />
-      </div>
-      <CommonStyleControls node={n} onChange={onChange} />
-    </div>
+    <Tabs defaultValue="style">
+      <TabsList className="w-full grid grid-cols-3">
+        <TabsTrigger value="style">Style</TabsTrigger>
+        <TabsTrigger value="layout">Layout</TabsTrigger>
+        <TabsTrigger value="tag">Tag</TabsTrigger>
+      </TabsList>
+      <TabsContent value="style">
+        <CommonStyleControls node={n} onChange={onChange} />
+      </TabsContent>
+      <TabsContent value="layout">
+        <LayoutControls node={n} onChange={onChange} />
+      </TabsContent>
+      <TabsContent value="tag">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs mb-1 text-muted-foreground">Tag</label>
+            <input
+              className="w-full rounded-md border px-3 py-2 bg-background"
+              value={n.tag}
+              onChange={(e) => onChange({ ...n, tag: e.target.value })}
+            />
+          </div>
+        </div>
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -535,6 +657,101 @@ function CommonStyleControls({
   );
 }
 
+function LayoutControls({
+  node,
+  onChange,
+}: {
+  node: EditorNode;
+  onChange: (n: EditorNode) => void;
+}) {
+  const style = { ...(node.style ?? {}) } as any;
+  const getNum = (v: any) => (typeof v === "number" ? v : parseInt(String(v || 0), 10) || 0);
+  const getRot = (v: any) => {
+    if (!v || typeof v !== "string") return 0;
+    const m = v.match(/rotate\(([-+]?\d+(?:\.\d+)?)deg\)/i);
+    if (m) {
+      const n = parseFloat(m[1]);
+      return Number.isFinite(n) ? Math.round(n) : 0;
+    }
+    return 0;
+  };
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <label className="block text-xs mb-1 text-muted-foreground">Width (px)</label>
+        <input
+          type="number"
+          className="w-full rounded-md border px-3 py-2 bg-background"
+          value={getNum(style.width)}
+          onChange={(e) =>
+            onChange({
+              ...node,
+              style: { ...(style as any), width: getNum(e.target.value) } as any,
+            })
+          }
+        />
+      </div>
+      <div>
+        <label className="block text-xs mb-1 text-muted-foreground">Height (px)</label>
+        <input
+          type="number"
+          className="w-full rounded-md border px-3 py-2 bg-background"
+          value={getNum(style.height)}
+          onChange={(e) =>
+            onChange({
+              ...node,
+              style: { ...(style as any), height: getNum(e.target.value) } as any,
+            })
+          }
+        />
+      </div>
+      <div>
+        <label className="block text-xs mb-1 text-muted-foreground">Margin Left (px)</label>
+        <input
+          type="number"
+          className="w-full rounded-md border px-3 py-2 bg-background"
+          value={getNum(style.marginLeft)}
+          onChange={(e) =>
+            onChange({
+              ...node,
+              style: { ...(style as any), marginLeft: getNum(e.target.value) } as any,
+            })
+          }
+        />
+      </div>
+      <div>
+        <label className="block text-xs mb-1 text-muted-foreground">Margin Top (px)</label>
+        <input
+          type="number"
+          className="w-full rounded-md border px-3 py-2 bg-background"
+          value={getNum(style.marginTop)}
+          onChange={(e) =>
+            onChange({
+              ...node,
+              style: { ...(style as any), marginTop: getNum(e.target.value) } as any,
+            })
+          }
+        />
+      </div>
+      <div className="col-span-2">
+        <label className="block text-xs mb-1 text-muted-foreground">Rotation (deg)</label>
+        <input
+          type="number"
+          className="w-full rounded-md border px-3 py-2 bg-background"
+          value={getRot(style.transform)}
+          onChange={(e) => {
+            const deg = Math.round(parseInt(String(e.target.value || 0), 10) || 0);
+            onChange({
+              ...node,
+              style: { ...(style as any), transform: `rotate(${deg}deg)` } as any,
+            });
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function ensureColor(value?: string) {
   if (!value) return "#000000";
   return value;
@@ -548,6 +765,288 @@ function convertStyle(
   const fs = (style as { fontSize?: unknown }).fontSize;
   if (typeof fs === "number") outStyle.fontSize = `${fs}px`;
   return outStyle;
+}
+
+function ResizeOverlay({
+  rect,
+  container,
+  colorClass,
+  onResizeStart,
+  onResize,
+  onResizeEnd,
+  onDragStart,
+  onDrag,
+  onDragEnd,
+  onRotateStart,
+  onRotate,
+  onRotateEnd,
+  requestFreshRect,
+}: {
+  rect: DOMRect;
+  container: HTMLDivElement | null;
+  colorClass: string;
+  onResizeStart: () => void;
+  onResize: (nextW?: number, nextH?: number) => void;
+  onResizeEnd: (finalW?: number, finalH?: number) => void;
+  onDragStart: () => void;
+  onDrag: (dx: number, dy: number) => void;
+  onDragEnd: (dx?: number, dy?: number) => void;
+  onRotateStart: () => void;
+  onRotate: (angleDeg: number) => void;
+  onRotateEnd: (angleDeg: number) => void;
+  requestFreshRect: () => DOMRect | null;
+}) {
+  const [style, setStyle] = useState<React.CSSProperties>({});
+  useEffect(() => {
+    const hostRect = container?.getBoundingClientRect();
+    if (!hostRect) return;
+    setStyle({
+      position: "absolute",
+      left: rect.left - hostRect.left,
+      top: rect.top - hostRect.top,
+      width: rect.width,
+      height: rect.height,
+      pointerEvents: "none",
+    });
+  }, [rect, container]);
+
+  useEffect(() => {
+    const onResizeWindow = () => {
+      const fresh = requestFreshRect?.();
+      if (!fresh) return;
+      const hostRect = container?.getBoundingClientRect();
+      if (!hostRect) return;
+      setStyle({
+        position: "absolute",
+        left: fresh.left - hostRect.left,
+        top: fresh.top - hostRect.top,
+        width: fresh.width,
+        height: fresh.height,
+        pointerEvents: "none",
+      });
+    };
+    window.addEventListener("resize", onResizeWindow);
+    return () => window.removeEventListener("resize", onResizeWindow);
+  }, [container, requestFreshRect]);
+
+  const startRef = useRef<{ x: number; y: number; rect: DOMRect; mode: string } | null>(null);
+  const startDrag = (e: React.PointerEvent, mode: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startRect = requestFreshRect?.() || rect;
+    startRef.current = { x: e.clientX, y: e.clientY, rect: startRect, mode };
+    onResizeStart?.();
+    const onMove = (ev: PointerEvent) => {
+      const st = startRef.current;
+      if (!st) return;
+      const dx = ev.clientX - st.x;
+      const dy = ev.clientY - st.y;
+      let nextW: number | undefined = undefined;
+      let nextH: number | undefined = undefined;
+      if (st.mode.includes("e")) nextW = Math.max(1, st.rect.width + dx);
+      if (st.mode.includes("s")) nextH = Math.max(1, st.rect.height + dy);
+      if (st.mode.includes("w")) nextW = Math.max(1, st.rect.width - dx);
+      if (st.mode.includes("n")) nextH = Math.max(1, st.rect.height - dy);
+      onResize?.(nextW, nextH);
+      const fresh = requestFreshRect?.();
+      const hostRect = container?.getBoundingClientRect();
+      if (fresh && hostRect) {
+        setStyle({
+          position: "absolute",
+          left: fresh.left - hostRect.left,
+          top: fresh.top - hostRect.top,
+          width: fresh.width,
+          height: fresh.height,
+          pointerEvents: "none",
+        });
+      }
+    };
+    const onUp = () => {
+      const st = startRef.current;
+      if (st) {
+        const fresh = requestFreshRect?.() || st.rect;
+        const dx = fresh.width - st.rect.width;
+        const dy = fresh.height - st.rect.height;
+        let finalW: number | undefined = undefined;
+        let finalH: number | undefined = undefined;
+        if (st.mode.includes("e") || st.mode.includes("w")) finalW = st.rect.width + dx;
+        if (st.mode.includes("s") || st.mode.includes("n")) finalH = st.rect.height + dy;
+        onResizeEnd?.(finalW, finalH);
+      }
+      startRef.current = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  };
+
+  // Move support
+  const moveRef = useRef<{ x: number; y: number } | null>(null);
+  const startMove = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    moveRef.current = { x: e.clientX, y: e.clientY };
+    onDragStart?.();
+    const onMove = (ev: PointerEvent) => {
+      const st = moveRef.current;
+      if (!st) return;
+      const dx = ev.clientX - st.x;
+      const dy = ev.clientY - st.y;
+      onDrag?.(dx, dy);
+      const fresh = requestFreshRect?.();
+      const hostRect = container?.getBoundingClientRect();
+      if (fresh && hostRect) {
+        setStyle({
+          position: "absolute",
+          left: fresh.left - hostRect.left,
+          top: fresh.top - hostRect.top,
+          width: fresh.width,
+          height: fresh.height,
+          pointerEvents: "none",
+        });
+      }
+    };
+    const onUp = (ev: PointerEvent) => {
+      const st = moveRef.current;
+      if (st) {
+        const dx = ev.clientX - st.x;
+        const dy = ev.clientY - st.y;
+        onDragEnd?.(dx, dy);
+      }
+      moveRef.current = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  };
+
+  // Rotate support
+  const rotateRef = useRef<{ cx: number; cy: number } | null>(null);
+  const startRotate = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const hostRect = container?.getBoundingClientRect();
+    if (!hostRect) return;
+    const fresh = requestFreshRect?.() || rect;
+    const cx = fresh.left + fresh.width / 2;
+    const cy = fresh.top + fresh.height / 2;
+    rotateRef.current = { cx, cy };
+    onRotateStart?.();
+    const calcAngle = (ev: PointerEvent) => {
+      const st = rotateRef.current;
+      if (!st) return 0;
+      const dx = ev.clientX - st.cx;
+      const dy = ev.clientY - st.cy;
+      return (Math.atan2(dy, dx) * 180) / Math.PI;
+    };
+    const onMove = (ev: PointerEvent) => {
+      const ang = calcAngle(ev);
+      onRotate?.(ang);
+      const freshNow = requestFreshRect?.();
+      const host = container?.getBoundingClientRect();
+      if (freshNow && host) {
+        setStyle({
+          position: "absolute",
+          left: freshNow.left - host.left,
+          top: freshNow.top - host.top,
+          width: freshNow.width,
+          height: freshNow.height,
+          pointerEvents: "none",
+        });
+      }
+    };
+    const onUp = (ev: PointerEvent) => {
+      const st = rotateRef.current;
+      const dx = st ? ev.clientX - st.cx : 0;
+      const dy = st ? ev.clientY - st.cy : 0;
+      const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+      onRotateEnd?.(ang);
+      rotateRef.current = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  };
+
+  const handle = (pos: string, cursor: string, styleExtra: React.CSSProperties) => (
+    <div
+      onPointerDown={(e) => startDrag(e, pos)}
+      style={{
+        position: "absolute",
+        width: 10,
+        height: 10,
+        background: "#0ea5e9",
+        border: "2px solid white",
+        borderRadius: 2,
+        boxShadow: "0 0 0 1px rgba(0,0,0,0.3)",
+        pointerEvents: "auto",
+        ...styleExtra,
+        cursor,
+      }}
+    />
+  );
+
+  return (
+    <div className={`absolute ring-2 ${colorClass} rounded-sm`} style={style}>
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />
+      <div
+        onPointerDown={startMove}
+        style={{
+          position: "absolute",
+          left: -28,
+          top: -28,
+          width: 16,
+          height: 16,
+          background: "#6b7280",
+          border: "2px solid white",
+          borderRadius: 4,
+          boxShadow: "0 0 0 1px rgba(0,0,0,0.3)",
+          cursor: "move",
+          pointerEvents: "auto",
+        }}
+      />
+      <div
+        onPointerDown={startRotate}
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: -28,
+          marginLeft: -8,
+          width: 16,
+          height: 16,
+          background: "#0ea5e9",
+          border: "2px solid white",
+          borderRadius: 9999,
+          boxShadow: "0 0 0 1px rgba(0,0,0,0.3)",
+          cursor: "grab",
+          pointerEvents: "auto",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: -12,
+          marginLeft: -1,
+          width: 2,
+          height: 12,
+          background: "#0ea5e9",
+          pointerEvents: "none",
+        }}
+      />
+      {handle("nw", "nwse-resize", { left: -5, top: -5 })}
+      {handle("ne", "nesw-resize", { right: -5, top: -5 })}
+      {handle("sw", "nesw-resize", { left: -5, bottom: -5 })}
+      {handle("se", "nwse-resize", { right: -5, bottom: -5 })}
+      {handle("n", "ns-resize", { left: "50%", top: -6, marginLeft: -5 })}
+      {handle("s", "ns-resize", { left: "50%", bottom: -6, marginLeft: -5 })}
+      {handle("w", "ew-resize", { top: "50%", left: -6, marginTop: -5 })}
+      {handle("e", "ew-resize", { top: "50%", right: -6, marginTop: -5 })}
+    </div>
+  );
 }
 
 function hydrateStylesFromDom(node: EditorNode, root: ShadowRoot): EditorNode {

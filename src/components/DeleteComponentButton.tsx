@@ -17,6 +17,7 @@ export default function DeleteComponentButton({ componentId }: { componentId: st
       toast.success("Deleted");
       router.refresh();
     } catch (err) {
+      console.error(err);
       toast.error("Delete failed");
     } finally {
       toast.dismiss(t);

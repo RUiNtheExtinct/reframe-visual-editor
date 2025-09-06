@@ -1,3 +1,4 @@
+/* eslint-disable  @typescript-eslint/no-explicit-any */
 "use client";
 
 import CodeEditor from "@/components/CodeEditor";
@@ -67,10 +68,34 @@ export default function SandboxEditor({
   const overridesRef = useRef<Overrides>({});
   const [history, setHistory] = useState<Overrides[]>([]);
   const [future, setFuture] = useState<Overrides[]>([]);
+  const dragStartMarginsRef = useRef<{ marginLeft: number; marginTop: number } | null>(null);
+
+  // Persist undo/redo stacks across reloads per component id
+  useEffect(() => {
+    try {
+      const h = sessionStorage.getItem(`reframe:history:${id}`);
+      const f = sessionStorage.getItem(`reframe:future:${id}`);
+      if (h) setHistory(JSON.parse(h));
+      if (f) setFuture(JSON.parse(f));
+    } catch {}
+  }, [id]);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(`reframe:history:${id}`, JSON.stringify(history));
+      sessionStorage.setItem(`reframe:future:${id}`, JSON.stringify(future));
+    } catch {}
+  }, [history, future, id]);
 
   // Parse overrides embedded in code
   useEffect(() => {
     overridesRef.current = extractOverrides(code);
+    try {
+      const h = extractHistory(code);
+      if (h) {
+        setHistory(Array.isArray(h.history) ? h.history : []);
+        setFuture(Array.isArray(h.future) ? h.future : []);
+      }
+    } catch {}
   }, []);
 
   const cloneOverrides = useCallback((src: Overrides): Overrides => {
@@ -127,11 +152,12 @@ export default function SandboxEditor({
     onError: () => setStatus("Save failed"),
   });
 
-  // Debounced auto-save on code/name/description changes
+  // Debounced auto-save on code/name/description/overrides/history changes
   const lastSavedRef = useRef<string>("");
   useEffect(() => {
     const t = setTimeout(async () => {
-      const sourceToSave = injectOverrides(code, overridesRef.current);
+      let sourceToSave = injectOverrides(code, overridesRef.current);
+      sourceToSave = injectHistory(sourceToSave, { history, future });
       // Include meta (name/description) in the identity to ensure meta-only edits save
       const saveKey = JSON.stringify({
         source: sourceToSave,
@@ -152,7 +178,7 @@ export default function SandboxEditor({
       });
     }, 900);
     return () => clearTimeout(t);
-  }, [code, name, description, overridesRevision]);
+  }, [code, name, description, overridesRevision, history, future]);
 
   // Compile + evaluate to component
   const { Component, compileError } = useCompiledComponent(code, overridesRef, setErrorMsg);
@@ -170,6 +196,15 @@ export default function SandboxEditor({
       }
     } catch {}
   }, [code]);
+
+  // Ensure the code editor reflects the latest overrides and history immediately when preview changes
+  useEffect(() => {
+    try {
+      let injected = injectOverrides(code, overridesRef.current);
+      injected = injectHistory(injected, { history, future });
+      if (injected !== code) setCode(injected);
+    } catch {}
+  }, [overridesRevision, history, future]);
 
   // Force remount preview on code or overrides changes to reflect updates without reload
   useEffect(() => {
@@ -402,12 +437,119 @@ export default function SandboxEditor({
                   colorClass="ring-red-500/60"
                 />
               )}
-              {/* Selected overlay */}
-              {selectedRect && (
-                <BoxOverlay
+              {/* Selected overlay with resize handles */}
+              {selectedRect && selectedSelector && (
+                <ResizeOverlay
                   rect={selectedRect}
                   container={containerRef.current}
                   colorClass="ring-green-500/70"
+                  onResizeStart={() => {
+                    pushHistory();
+                  }}
+                  onResize={(nextW, nextH) => {
+                    const root = shadowRootRef.current;
+                    if (!root || !selectedSelector) return;
+                    const el = root.querySelector(selectedSelector) as HTMLElement | null;
+                    if (!el) return;
+                    try {
+                      if (typeof nextW === "number") {
+                        (el.style as any).width = `${Math.max(1, Math.round(nextW))}px`;
+                      }
+                      if (typeof nextH === "number") {
+                        (el.style as any).height = `${Math.max(1, Math.round(nextH))}px`;
+                      }
+                      setSelectedRect(el.getBoundingClientRect());
+                    } catch {}
+                  }}
+                  onResizeEnd={(finalW, finalH) => {
+                    const root = shadowRootRef.current;
+                    if (!root || !selectedSelector) return;
+                    const el = root.querySelector(selectedSelector) as HTMLElement | null;
+                    if (!el) return;
+                    const prev = overridesRef.current[selectedSelector]?.style || {};
+                    const nextStyle: any = { ...prev };
+                    if (typeof finalW === "number")
+                      nextStyle.width = Math.max(1, Math.round(finalW));
+                    if (typeof finalH === "number")
+                      nextStyle.height = Math.max(1, Math.round(finalH));
+                    overridesRef.current = {
+                      ...overridesRef.current,
+                      [selectedSelector]: {
+                        ...(overridesRef.current[selectedSelector] || {}),
+                        style: nextStyle,
+                      },
+                    };
+                    // Trigger autosave via overrides only; avoid preview remount
+                    setOverridesRevision((r) => r + 1);
+                  }}
+                  onDragStart={() => {
+                    const root = shadowRootRef.current;
+                    if (!root || !selectedSelector) return;
+                    const el = root.querySelector(selectedSelector) as HTMLElement | null;
+                    if (!el) return;
+                    pushHistory();
+                    const cs = getComputedStyle(el);
+                    const ml = parseInt(cs.marginLeft || "0", 10) || 0;
+                    const mt = parseInt(cs.marginTop || "0", 10) || 0;
+                    dragStartMarginsRef.current = { marginLeft: ml, marginTop: mt };
+                  }}
+                  onDrag={(dx, dy) => {
+                    const root = shadowRootRef.current;
+                    if (!root || !selectedSelector) return;
+                    const el = root.querySelector(selectedSelector) as HTMLElement | null;
+                    if (!el) return;
+                    const base = dragStartMarginsRef.current || { marginLeft: 0, marginTop: 0 };
+                    const ml = Math.round(base.marginLeft + dx);
+                    const mt = Math.round(base.marginTop + dy);
+                    (el.style as any).marginLeft = `${ml}px`;
+                    (el.style as any).marginTop = `${mt}px`;
+                    setSelectedRect(el.getBoundingClientRect());
+                  }}
+                  onDragEnd={(dx, dy) => {
+                    if (!selectedSelector) return;
+                    const base = dragStartMarginsRef.current || { marginLeft: 0, marginTop: 0 };
+                    const ml = Math.round(base.marginLeft + (dx || 0));
+                    const mt = Math.round(base.marginTop + (dy || 0));
+                    const prev = overridesRef.current[selectedSelector]?.style || {};
+                    overridesRef.current = {
+                      ...overridesRef.current,
+                      [selectedSelector]: {
+                        ...(overridesRef.current[selectedSelector] || {}),
+                        style: { ...prev, marginLeft: ml, marginTop: mt },
+                      },
+                    };
+                    setOverridesRevision((r) => r + 1);
+                    dragStartMarginsRef.current = null;
+                  }}
+                  onRotateStart={() => {
+                    // history already captured on resize/move; no-op here
+                  }}
+                  onRotate={(ang) => {
+                    const root = shadowRootRef.current;
+                    if (!root || !selectedSelector) return;
+                    const el = root.querySelector(selectedSelector) as HTMLElement | null;
+                    if (!el) return;
+                    (el.style as any).transform = `rotate(${Math.round(ang)}deg)`;
+                    setSelectedRect(el.getBoundingClientRect());
+                  }}
+                  onRotateEnd={(ang) => {
+                    if (!selectedSelector) return;
+                    const prev = overridesRef.current[selectedSelector]?.style || {};
+                    overridesRef.current = {
+                      ...overridesRef.current,
+                      [selectedSelector]: {
+                        ...(overridesRef.current[selectedSelector] || {}),
+                        style: { ...prev, transform: `rotate(${Math.round(ang)}deg)` },
+                      },
+                    };
+                    setOverridesRevision((r) => r + 1);
+                  }}
+                  requestFreshRect={() => {
+                    const root = shadowRootRef.current;
+                    if (!root || !selectedSelector) return null;
+                    const el = root.querySelector(selectedSelector) as HTMLElement | null;
+                    return el ? el.getBoundingClientRect() : null;
+                  }}
                 />
               )}
             </div>
@@ -539,12 +681,13 @@ export default function SandboxEditor({
                   readOnly
                 />
               </div>
-              {/* Inspector Tabs: Formatting, Borders, Gradients */}
+              {/* Inspector Tabs: Formatting, Borders, Gradients, Layout */}
               <Tabs defaultValue="formatting">
-                <TabsList className="w-full grid grid-cols-3">
+                <TabsList className="w-full grid grid-cols-4">
                   <TabsTrigger value="formatting">Formatting</TabsTrigger>
                   <TabsTrigger value="borders">Borders</TabsTrigger>
                   <TabsTrigger value="gradients">Gradients</TabsTrigger>
+                  <TabsTrigger value="layout">Layout</TabsTrigger>
                 </TabsList>
                 <TabsContent value="formatting">
                   <div className="space-y-3">
@@ -766,6 +909,68 @@ export default function SandboxEditor({
                     </div>
                   </div>
                 </TabsContent>
+                <TabsContent value="layout">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-foreground/70 mb-1">Width (px)</label>
+                      <input
+                        type="number"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        value={Number((selectedStyle as any)["width"] ?? 0)}
+                        onChange={(e) => applyStyleChange("width", Number(e.target.value || 0))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-foreground/70 mb-1">Height (px)</label>
+                      <input
+                        type="number"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        value={Number((selectedStyle as any)["height"] ?? 0)}
+                        onChange={(e) => applyStyleChange("height", Number(e.target.value || 0))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-foreground/70 mb-1">
+                        Margin Left (px)
+                      </label>
+                      <input
+                        type="number"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        value={Number((selectedStyle as any)["marginLeft"] ?? 0)}
+                        onChange={(e) =>
+                          applyStyleChange("marginLeft", Number(e.target.value || 0))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-foreground/70 mb-1">
+                        Margin Top (px)
+                      </label>
+                      <input
+                        type="number"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        value={Number((selectedStyle as any)["marginTop"] ?? 0)}
+                        onChange={(e) => applyStyleChange("marginTop", Number(e.target.value || 0))}
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs text-foreground/70 mb-1">
+                        Rotation (deg)
+                      </label>
+                      <input
+                        type="number"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        value={extractRotationDeg(
+                          (selectedStyle as any)["transform"] as string | undefined
+                        )}
+                        onChange={(e) => {
+                          const deg = Math.round(Number(e.target.value || 0));
+                          applyStyleChange("transform", `rotate(${deg}deg)`);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
               </Tabs>
             </div>
           ) : (
@@ -816,6 +1021,296 @@ function BoxOverlay({
   return <div className={`absolute ring-2 ${colorClass} rounded-sm`} style={style} />;
 }
 
+function ResizeOverlay({
+  rect,
+  container,
+  colorClass,
+  onResizeStart,
+  onResize,
+  onResizeEnd,
+  onDragStart,
+  onDrag,
+  onDragEnd,
+  onRotateStart,
+  onRotate,
+  onRotateEnd,
+  requestFreshRect,
+}: {
+  rect: DOMRect;
+  container: HTMLDivElement | null;
+  colorClass: string;
+  onResizeStart: () => void;
+  onResize: (nextW?: number, nextH?: number) => void;
+  onResizeEnd: (finalW?: number, finalH?: number) => void;
+  onDragStart: () => void;
+  onDrag: (dx: number, dy: number) => void;
+  onDragEnd: (dx?: number, dy?: number) => void;
+  onRotateStart: () => void;
+  onRotate: (angleDeg: number) => void;
+  onRotateEnd: (angleDeg: number) => void;
+  requestFreshRect: () => DOMRect | null;
+}) {
+  const [style, setStyle] = useState<React.CSSProperties>({});
+  useEffect(() => {
+    const hostRect = container?.getBoundingClientRect();
+    if (!hostRect) return;
+    setStyle({
+      position: "absolute",
+      left: rect.left - hostRect.left,
+      top: rect.top - hostRect.top,
+      width: rect.width,
+      height: rect.height,
+      pointerEvents: "none",
+    });
+  }, [rect, container]);
+
+  useEffect(() => {
+    const onResizeWindow = () => {
+      const fresh = requestFreshRect?.();
+      if (!fresh) return;
+      const hostRect = container?.getBoundingClientRect();
+      if (!hostRect) return;
+      setStyle({
+        position: "absolute",
+        left: fresh.left - hostRect.left,
+        top: fresh.top - hostRect.top,
+        width: fresh.width,
+        height: fresh.height,
+        pointerEvents: "none",
+      });
+    };
+    window.addEventListener("resize", onResizeWindow);
+    return () => window.removeEventListener("resize", onResizeWindow);
+  }, [container, requestFreshRect]);
+
+  const startRef = useRef<{ x: number; y: number; rect: DOMRect; mode: string } | null>(null);
+  const startDrag = (e: React.PointerEvent, mode: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startRect = requestFreshRect?.() || rect;
+    startRef.current = { x: e.clientX, y: e.clientY, rect: startRect, mode };
+    onResizeStart?.();
+    const onMove = (ev: PointerEvent) => {
+      const st = startRef.current;
+      if (!st) return;
+      const dx = ev.clientX - st.x;
+      const dy = ev.clientY - st.y;
+      let nextW: number | undefined = undefined;
+      let nextH: number | undefined = undefined;
+      if (st.mode.includes("e")) nextW = Math.max(1, st.rect.width + dx);
+      if (st.mode.includes("s")) nextH = Math.max(1, st.rect.height + dy);
+      if (st.mode.includes("w")) nextW = Math.max(1, st.rect.width - dx);
+      if (st.mode.includes("n")) nextH = Math.max(1, st.rect.height - dy);
+      onResize?.(nextW, nextH);
+      const fresh = requestFreshRect?.();
+      const hostRect = container?.getBoundingClientRect();
+      if (fresh && hostRect) {
+        setStyle({
+          position: "absolute",
+          left: fresh.left - hostRect.left,
+          top: fresh.top - hostRect.top,
+          width: fresh.width,
+          height: fresh.height,
+          pointerEvents: "none",
+        });
+      }
+    };
+    const onUp = () => {
+      const st = startRef.current;
+      if (st) {
+        const fresh = requestFreshRect?.() || st.rect;
+        const dx = fresh.width - st.rect.width;
+        const dy = fresh.height - st.rect.height;
+        let finalW: number | undefined = undefined;
+        let finalH: number | undefined = undefined;
+        if (st.mode.includes("e") || st.mode.includes("w")) finalW = st.rect.width + dx;
+        if (st.mode.includes("s") || st.mode.includes("n")) finalH = st.rect.height + dy;
+        onResizeEnd?.(finalW, finalH);
+      }
+      startRef.current = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  };
+
+  // Move support
+  const moveRef = useRef<{ x: number; y: number } | null>(null);
+  const startMove = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    moveRef.current = { x: e.clientX, y: e.clientY };
+    onDragStart?.();
+    const onMove = (ev: PointerEvent) => {
+      const st = moveRef.current;
+      if (!st) return;
+      const dx = ev.clientX - st.x;
+      const dy = ev.clientY - st.y;
+      onDrag?.(dx, dy);
+      const fresh = requestFreshRect?.();
+      const hostRect = container?.getBoundingClientRect();
+      if (fresh && hostRect) {
+        setStyle({
+          position: "absolute",
+          left: fresh.left - hostRect.left,
+          top: fresh.top - hostRect.top,
+          width: fresh.width,
+          height: fresh.height,
+          pointerEvents: "none",
+        });
+      }
+    };
+    const onUp = (ev: PointerEvent) => {
+      const st = moveRef.current;
+      if (st) {
+        const dx = ev.clientX - st.x;
+        const dy = ev.clientY - st.y;
+        onDragEnd?.(dx, dy);
+      }
+      moveRef.current = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  };
+
+  // Rotate support
+  const rotateRef = useRef<{ cx: number; cy: number } | null>(null);
+  const startRotate = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const hostRect = container?.getBoundingClientRect();
+    if (!hostRect) return;
+    const fresh = requestFreshRect?.() || rect;
+    const cx = fresh.left + fresh.width / 2;
+    const cy = fresh.top + fresh.height / 2;
+    rotateRef.current = { cx, cy };
+    onRotateStart?.();
+    const calcAngle = (ev: PointerEvent) => {
+      const st = rotateRef.current;
+      if (!st) return 0;
+      const dx = ev.clientX - st.cx;
+      const dy = ev.clientY - st.cy;
+      return (Math.atan2(dy, dx) * 180) / Math.PI;
+    };
+    const onMove = (ev: PointerEvent) => {
+      const ang = calcAngle(ev);
+      onRotate?.(ang);
+      const freshNow = requestFreshRect?.();
+      const host = container?.getBoundingClientRect();
+      if (freshNow && host) {
+        setStyle({
+          position: "absolute",
+          left: freshNow.left - host.left,
+          top: freshNow.top - host.top,
+          width: freshNow.width,
+          height: freshNow.height,
+          pointerEvents: "none",
+        });
+      }
+    };
+    const onUp = (ev: PointerEvent) => {
+      const ang = ((): number => {
+        const st = rotateRef.current;
+        if (!st) return 0;
+        const dx = ev.clientX - st.cx;
+        const dy = ev.clientY - st.cy;
+        return (Math.atan2(dy, dx) * 180) / Math.PI;
+      })();
+      onRotateEnd?.(ang);
+      rotateRef.current = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  };
+
+  const handle = (pos: string, cursor: string, styleExtra: React.CSSProperties) => (
+    <div
+      onPointerDown={(e) => startDrag(e, pos)}
+      style={{
+        position: "absolute",
+        width: 10,
+        height: 10,
+        background: "#16a34a",
+        border: "2px solid white",
+        borderRadius: 2,
+        boxShadow: "0 0 0 1px rgba(0,0,0,0.3)",
+        pointerEvents: "auto",
+        ...styleExtra,
+        cursor,
+      }}
+    />
+  );
+
+  return (
+    <div className={`absolute ring-2 ${colorClass} rounded-sm`} style={style}>
+      {/* drag layer to capture pointer events */}
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />
+      {/* move handle */}
+      <div
+        onPointerDown={startMove}
+        style={{
+          position: "absolute",
+          left: -28,
+          top: -28,
+          width: 16,
+          height: 16,
+          background: "#6b7280",
+          border: "2px solid white",
+          borderRadius: 4,
+          boxShadow: "0 0 0 1px rgba(0,0,0,0.3)",
+          cursor: "move",
+          pointerEvents: "auto",
+        }}
+      />
+      {/* rotate handle */}
+      <div
+        onPointerDown={startRotate}
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: -28,
+          marginLeft: -8,
+          width: 16,
+          height: 16,
+          background: "#22c55e",
+          border: "2px solid white",
+          borderRadius: 9999,
+          boxShadow: "0 0 0 1px rgba(0,0,0,0.3)",
+          cursor: "grab",
+          pointerEvents: "auto",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: -12,
+          marginLeft: -1,
+          width: 2,
+          height: 12,
+          background: "#22c55e",
+          pointerEvents: "none",
+        }}
+      />
+      {/* corners */}
+      {handle("nw", "nwse-resize", { left: -5, top: -5 })}
+      {handle("ne", "nesw-resize", { right: -5, top: -5 })}
+      {handle("sw", "nesw-resize", { left: -5, bottom: -5 })}
+      {handle("se", "nwse-resize", { right: -5, bottom: -5 })}
+      {/* edges */}
+      {handle("n", "ns-resize", { left: "50%", top: -6, marginLeft: -5 })}
+      {handle("s", "ns-resize", { left: "50%", bottom: -6, marginLeft: -5 })}
+      {handle("w", "ew-resize", { top: "50%", left: -6, marginTop: -5 })}
+      {handle("e", "ew-resize", { top: "50%", right: -6, marginTop: -5 })}
+    </div>
+  );
+}
+
 const PIXEL_STYLES = new Set([
   "fontSize",
   "padding",
@@ -824,10 +1319,26 @@ const PIXEL_STYLES = new Set([
   "marginBottom",
   "marginLeft",
   "marginRight",
+  "width",
+  "height",
+  "minWidth",
+  "minHeight",
+  "maxWidth",
+  "maxHeight",
 ]);
 
 function ensureColor(value?: string) {
   return value || "#e11d48"; // tailwind red-600
+}
+
+function extractRotationDeg(transform?: string): number {
+  if (!transform) return 0;
+  const m = transform.match(/rotate\(([-+]?\d+(?:\.\d+)?)deg\)/i);
+  if (m) {
+    const n = parseFloat(m[1]);
+    return Number.isFinite(n) ? Math.round(n) : 0;
+  }
+  return 0;
 }
 
 function buildUniqueSelector(el: Element, root: ParentNode) {
@@ -877,6 +1388,28 @@ function injectOverrides(source: string, overrides: Overrides): string {
     .trimEnd();
   if (!overrides || Object.keys(overrides).length === 0) return without;
   const comment = `\n\n/* ${OVERRIDES_TAG}: ${JSON.stringify(overrides)} */\n`;
+  return `${without}${comment}`;
+}
+
+const HISTORY_TAG = "@reframe-history";
+type HistoryPayload = { history: Overrides[]; future: Overrides[] };
+
+function extractHistory(source: string): HistoryPayload | null {
+  const re = new RegExp(`/\\*\\s*${HISTORY_TAG}:(.*?)\\*/`, "s");
+  const m = source.match(re);
+  if (!m) return null;
+  try {
+    const json = m[1].trim();
+    const obj = JSON.parse(json);
+    if (obj && typeof obj === "object") return obj as HistoryPayload;
+  } catch {}
+  return null;
+}
+
+function injectHistory(source: string, payload: HistoryPayload): string {
+  const without = source.replace(new RegExp(`/\\*\\s*${HISTORY_TAG}:(.*?)\\*/`, "s"), "").trimEnd();
+  if (!payload) return without;
+  const comment = `\n\n/* ${HISTORY_TAG}: ${JSON.stringify(payload)} */\n`;
   return `${without}${comment}`;
 }
 
