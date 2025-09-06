@@ -210,6 +210,11 @@ export default function WebsiteEditor({
   const splitRef = useRef<HTMLDivElement | null>(null);
   const [leftWidth, setLeftWidth] = useState<number>(0);
   const [isDraggingSplit, setIsDraggingSplit] = useState<boolean>(false);
+  const [previewDevice, setPreviewDevice] = useState<"desktop" | "tablet" | "mobile" | "custom">(
+    "desktop"
+  );
+  const [customPreviewWidth, setCustomPreviewWidth] = useState<number>(1280);
+  const [customPreviewHeight, setCustomPreviewHeight] = useState<number>(800);
   useEffect(() => {
     const update = () => {
       const el = splitRef.current;
@@ -260,6 +265,23 @@ export default function WebsiteEditor({
     setLeftWidth(Math.round(total * 0.75));
   }, []);
 
+  const getPreviewSize = useCallback((): { width: number; height?: number } => {
+    switch (previewDevice) {
+      case "mobile":
+        return { width: 375, height: 667 };
+      case "tablet":
+        return { width: 768, height: 1024 };
+      case "desktop":
+        return { width: 1280, height: 800 };
+      case "custom":
+      default:
+        return {
+          width: Math.max(240, customPreviewWidth),
+          height: Math.max(320, customPreviewHeight),
+        };
+    }
+  }, [previewDevice, customPreviewWidth, customPreviewHeight]);
+
   return (
     <div ref={splitRef} className="max-w-6xl mx-auto px-1 xl:flex gap-6 h-[calc(100dvh-140px)]">
       <div
@@ -269,6 +291,44 @@ export default function WebsiteEditor({
         <div className="flex items-center justify-between px-1 py-2">
           <h2 className="text-sm font-medium text-muted-foreground">{title ?? "Preview"}</h2>
           <div className="flex items-center gap-2">
+            <div className="hidden xl:flex items-center gap-2">
+              <Select value={previewDevice} onValueChange={(v) => setPreviewDevice(v as any)}>
+                <SelectTrigger className="h-8 w-[140px]">
+                  <SelectValue placeholder="Preview device" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="desktop">Desktop</SelectItem>
+                  <SelectItem value="tablet">Tablet</SelectItem>
+                  <SelectItem value="mobile">Mobile</SelectItem>
+                  <SelectItem value="custom">Custom…</SelectItem>
+                </SelectContent>
+              </Select>
+              {previewDevice === "custom" && (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    className="w-20 h-8 rounded-md border bg-background px-2 text-xs"
+                    value={customPreviewWidth}
+                    onChange={(e) =>
+                      setCustomPreviewWidth(Math.max(240, Number(e.target.value || 0)))
+                    }
+                    placeholder="Width"
+                    aria-label="Custom width"
+                  />
+                  <span className="text-xs text-muted-foreground">×</span>
+                  <input
+                    type="number"
+                    className="w-20 h-8 rounded-md border bg-background px-2 text-xs"
+                    value={customPreviewHeight}
+                    onChange={(e) =>
+                      setCustomPreviewHeight(Math.max(320, Number(e.target.value || 0)))
+                    }
+                    placeholder="Height"
+                    aria-label="Custom height"
+                  />
+                </div>
+              )}
+            </div>
             <div className="hidden xl:flex items-center gap-1">
               <button
                 className="h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center hover:bg-accent"
@@ -323,7 +383,18 @@ export default function WebsiteEditor({
             </Button>
           </div>
         </div>
-        <div className="rounded-lg border bg-background p-0 transition-colors" ref={containerRef}>
+        <div
+          className="rounded-lg border bg-background p-0 transition-colors"
+          ref={containerRef}
+          style={{
+            width: Math.min(getPreviewSize().width, (leftWidth || 1200) - 24),
+            marginLeft: "auto",
+            marginRight: "auto",
+            ...(previewDevice === "custom" && getPreviewSize().height
+              ? { height: getPreviewSize().height }
+              : {}),
+          }}
+        >
           {activeTab === "design" ? (
             <PreviewSurface onShadowRootReady={(r) => (previewShadowRootRef.current = r)}>
               <div className="p-6 min-h-[520px]">

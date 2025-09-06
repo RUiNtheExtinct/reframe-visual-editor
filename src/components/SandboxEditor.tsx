@@ -84,6 +84,11 @@ export default function SandboxEditor({
   const [leftWidth, setLeftWidth] = useState<number>(0);
   const [isDraggingSplit, setIsDraggingSplit] = useState<boolean>(false);
   const [isSplitLocked, setIsSplitLocked] = useState<boolean>(false);
+  const [previewDevice, setPreviewDevice] = useState<"desktop" | "tablet" | "mobile" | "custom">(
+    "desktop"
+  );
+  const [customPreviewWidth, setCustomPreviewWidth] = useState<number>(1280);
+  const [customPreviewHeight, setCustomPreviewHeight] = useState<number>(800);
   useEffect(() => {
     const update = () => {
       const el = splitRef.current;
@@ -133,6 +138,23 @@ export default function SandboxEditor({
     const total = root.getBoundingClientRect().width;
     setLeftWidth(Math.round(total * 0.75));
   }, []);
+
+  const getPreviewSize = useCallback((): { width: number; height?: number } => {
+    switch (previewDevice) {
+      case "mobile":
+        return { width: 375, height: 667 };
+      case "tablet":
+        return { width: 768, height: 1024 };
+      case "desktop":
+        return { width: 1280, height: 800 };
+      case "custom":
+      default:
+        return {
+          width: Math.max(240, customPreviewWidth),
+          height: Math.max(320, customPreviewHeight),
+        };
+    }
+  }, [previewDevice, customPreviewWidth, customPreviewHeight]);
 
   // Persist undo/redo stacks across reloads per component id
   useEffect(() => {
@@ -428,6 +450,44 @@ export default function SandboxEditor({
             <span className="text-xs text-foreground/80">{status}</span>
           </div>
           <div className="flex items-center gap-2">
+            <div className="hidden xl:flex items-center gap-2">
+              <Select value={previewDevice} onValueChange={(v) => setPreviewDevice(v as any)}>
+                <SelectTrigger className="h-8 w-[140px]">
+                  <SelectValue placeholder="Preview device" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="desktop">Desktop</SelectItem>
+                  <SelectItem value="tablet">Tablet</SelectItem>
+                  <SelectItem value="mobile">Mobile</SelectItem>
+                  <SelectItem value="custom">Custom…</SelectItem>
+                </SelectContent>
+              </Select>
+              {previewDevice === "custom" && (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    className="w-20 h-8 rounded-md border bg-background px-2 text-xs"
+                    value={customPreviewWidth}
+                    onChange={(e) =>
+                      setCustomPreviewWidth(Math.max(240, Number(e.target.value || 0)))
+                    }
+                    placeholder="Width"
+                    aria-label="Custom width"
+                  />
+                  <span className="text-xs text-foreground/60">×</span>
+                  <input
+                    type="number"
+                    className="w-20 h-8 rounded-md border bg-background px-2 text-xs"
+                    value={customPreviewHeight}
+                    onChange={(e) =>
+                      setCustomPreviewHeight(Math.max(320, Number(e.target.value || 0)))
+                    }
+                    placeholder="Height"
+                    aria-label="Custom height"
+                  />
+                </div>
+              )}
+            </div>
             <div className="hidden xl:flex items-center gap-1">
               <button
                 className="h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center hover:bg-accent"
@@ -502,7 +562,18 @@ export default function SandboxEditor({
                 <span className="text-xs text-red-600 dark:text-red-400">{compileError}</span>
               )}
             </div>
-            <div ref={containerRef} className="relative">
+            <div
+              ref={containerRef}
+              className="relative"
+              style={{
+                width: Math.min(getPreviewSize().width, (leftWidth || 1200) - 24),
+                marginLeft: "auto",
+                marginRight: "auto",
+                ...(previewDevice === "custom" && getPreviewSize().height
+                  ? { height: getPreviewSize().height }
+                  : {}),
+              }}
+            >
               <PreviewSurface onShadowRootReady={(r) => (shadowRootRef.current = r)}>
                 <div key={previewKey} className="p-6 min-h-[640px]">
                   {/* Inject overrides style tag */}
