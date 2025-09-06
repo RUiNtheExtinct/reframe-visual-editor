@@ -2,9 +2,17 @@
 
 import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading…</div>}>
+      <ResetPasswordContent />
+    </Suspense>
+  );
+}
+
+function ResetPasswordContent() {
   const search = useSearchParams();
   const router = useRouter();
   const token = useMemo(() => search.get("token") || "", [search]);
