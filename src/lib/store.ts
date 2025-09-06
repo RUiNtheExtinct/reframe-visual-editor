@@ -1,7 +1,7 @@
 /* eslint-disable  @typescript-eslint/no-explicit-any */
 import { getDb } from "@/db";
 import { components } from "@/db/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import type { StoredComponent } from "../types/editor";
 
 export async function createComponent(
@@ -120,21 +120,27 @@ export async function listComponentsPaginated(
   const offset = (page - 1) * pageSize;
   // Basic ILIKE match on name/source/description
   const like = q && q.trim() ? `%${q.trim()}%` : undefined;
-  const where = like
-    ? (components.name as any)
-        .ilike(like as any)
-        .or((components.source as any).ilike(like as any))
-        .or((components as any).description.ilike(like as any))
+  const likeWhere = like
+    ? or(
+        ilike(components.name, like),
+        ilike(components.source, like),
+        ilike(components.description as any, like as any)
+      )
     : undefined;
-  const base = drizzle.select().from(components).where(eq(components.userId, userId));
-  const rows = await (where ? (base as any).where(where) : base)
-    .orderBy(desc(components.updatedAt))
-    .limit(pageSize)
-    .offset(offset);
-  const countBase = drizzle
+  const filters = [eq(components.userId, userId)];
+  if (likeWhere) {
+    filters.push(likeWhere);
+  }
+  const query: any = drizzle
+    .select()
+    .from(components)
+    .where(and(...filters));
+
+  const rows = await query.orderBy(desc(components.updatedAt)).limit(pageSize).offset(offset);
+  const countRes = await drizzle
     .select({ count: (sql as any)<number>`count(*)` })
-    .from(components as any);
-  const countRes = await (where ? (countBase as any).where(where) : countBase);
+    .from(components)
+    .where(and(...filters));
   const total = Number((countRes as any)[0]?.count ?? 0);
   const items: StoredComponent[] = (rows as any[]).map((r) => ({
     componentId: r.componentId,
