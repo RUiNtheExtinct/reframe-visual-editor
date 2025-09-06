@@ -12,6 +12,7 @@ type Props = {
   fileName?: string; // e.g. Component.tsx
   maxHeight?: number;
   instanceKey?: string | number;
+  onSave?: () => void;
 };
 
 const Monaco = dynamic(async () => (await import("@monaco-editor/react")).default, {
@@ -31,6 +32,7 @@ export default function CodeEditor({
   fileName = "Component.tsx",
   maxHeight = 760,
   instanceKey,
+  onSave,
 }: Props) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -68,13 +70,14 @@ export default function CodeEditor({
       <Monaco
         key={instanceKey}
         height={`${maxHeight}px`}
+        language={language}
         defaultLanguage={language}
         path={fileName}
         value={value}
         onChange={handleChange}
         theme={resolvedTheme === "dark" ? "vs-dark" : "light"}
         beforeMount={(monaco) => configureMonaco(monaco)}
-        onMount={(editor, monaco) => registerEnhancements(editor, monaco)}
+        onMount={(editor, monaco) => registerEnhancements(editor, monaco, onSave, language)}
         options={{
           fontSize: 13,
           minimap: { enabled: false },
@@ -84,6 +87,16 @@ export default function CodeEditor({
           renderWhitespace: "selection",
           automaticLayout: true,
           tabSize: 2,
+          bracketPairColorization: { enabled: true },
+          guides: { bracketPairs: true, indentation: true },
+          mouseWheelZoom: true,
+          quickSuggestions: { other: true, comments: false, strings: true },
+          suggestOnTriggerCharacters: true,
+          tabCompletion: "on",
+          formatOnPaste: true,
+          formatOnType: true,
+          renderLineHighlight: "all",
+          acceptSuggestionOnEnter: "smart",
         }}
       />
     </div>
@@ -162,7 +175,33 @@ declare function tw(strings: TemplateStringsArray, ...exprs: any[]): string;
 }
 
 let __tailwindEnhancementsRegistered = false;
-function registerEnhancements(editor: any, monaco: any) {
+async function maybeEnableEmmet(monaco: any, editor: any) {
+  // no-op placeholder for future Emmet integration
+}
+
+function registerEnhancements(editor: any, monaco: any, onSave?: () => void, language?: string) {
+  // Save keybinding (Cmd/Ctrl+S)
+  try {
+    const KeyMod = (monaco as any).KeyMod;
+    const KeyCode = (monaco as any).KeyCode;
+    editor.addCommand(KeyMod.CtrlCmd | KeyCode.KeyS, () => {
+      try {
+        onSave?.();
+      } catch {}
+    });
+  } catch {}
+
+  // Ensure model language is correct
+  try {
+    const model = editor.getModel?.();
+    if (model && language) {
+      monaco.editor.setModelLanguage(model, language);
+    }
+  } catch {}
+
+  // Optional: Emmet support
+  maybeEnableEmmet(monaco, editor);
+
   // Try to enable Tailwind CSS IntelliSense for Monaco on the fly
   (async () => {
     try {

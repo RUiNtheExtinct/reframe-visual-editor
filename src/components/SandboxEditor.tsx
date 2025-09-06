@@ -236,33 +236,98 @@ export default function SandboxEditor({
     onError: () => setStatus("Save failed"),
   });
 
-  // Debounced auto-save on code/name/description/overrides/history changes
+  // Throttled auto-save with a minimum 15s interval between saves
   const lastSavedRef = useRef<string>("");
-  useEffect(() => {
-    const t = setTimeout(async () => {
-      let sourceToSave = injectOverrides(code, overridesRef.current);
-      sourceToSave = injectHistory(sourceToSave, { history, future });
-      // Include meta (name/description) in the identity to ensure meta-only edits save
-      const saveKey = JSON.stringify({
-        source: sourceToSave,
-        name: name || undefined,
-        description: description || undefined,
-      });
-      if (saveKey === lastSavedRef.current) return;
-      lastSavedRef.current = saveKey;
+  const lastSavedAtRef = useRef<number>(0);
+  const pendingSaveKeyRef = useRef<string | null>(null);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveInFlightRef = useRef<boolean>(false);
+
+  const computeSaveState = useCallback(() => {
+    let sourceToSave = injectOverrides(code, overridesRef.current);
+    sourceToSave = injectHistory(sourceToSave, { history, future });
+    const saveKey = JSON.stringify({
+      source: sourceToSave,
+      name: name || undefined,
+      description: description || undefined,
+    });
+    return { sourceToSave, saveKey };
+  }, [code, name, description, history, future]);
+
+  const performSave = useCallback(
+    async (opts?: { manual?: boolean }) => {
+      const { manual } = opts || {};
+      const { sourceToSave, saveKey } = computeSaveState();
+      if (saveKey === lastSavedRef.current) {
+        if (manual) toast.info("No changes to save");
+        return;
+      }
+      if (saveInFlightRef.current) {
+        // A save is already running; mark pending and exit. It will be scheduled after current save.
+        pendingSaveKeyRef.current = saveKey;
+        if (manual) toast.info("Save already in progress");
+        return;
+      }
+      pendingSaveKeyRef.current = saveKey;
+      saveInFlightRef.current = true;
       let tree: any | undefined;
       try {
         tree = await parseJsxToTree(sourceToSave);
       } catch {}
-      updateMutation.mutate({
-        source: sourceToSave,
-        tree,
-        name: name || undefined,
-        description: description || undefined,
-      });
-    }, 900);
-    return () => clearTimeout(t);
-  }, [code, name, description, overridesRevision, history, future]);
+      try {
+        await updateMutation.mutateAsync({
+          source: sourceToSave,
+          tree,
+          name: name || undefined,
+          description: description || undefined,
+        });
+        lastSavedRef.current = saveKey;
+        lastSavedAtRef.current = Date.now();
+        pendingSaveKeyRef.current = null;
+        if (manual) toast.success("Saved changes");
+      } catch {
+        if (manual) toast.error("Save failed");
+      } finally {
+        saveInFlightRef.current = false;
+        // If changes accrued during the save, schedule a new autosave respecting the 15s window
+        const { saveKey: currentKey } = computeSaveState();
+        if (currentKey !== lastSavedRef.current) {
+          scheduleAutosave();
+        }
+      }
+    },
+    [computeSaveState, updateMutation, name, description]
+  );
+
+  const scheduleAutosave = useCallback(() => {
+    const { saveKey } = computeSaveState();
+    pendingSaveKeyRef.current = saveKey;
+    if (autosaveTimerRef.current) return;
+    const now = Date.now();
+    const elapsed = now - (lastSavedAtRef.current || 0);
+    const minDelay = 15000;
+    const delay = elapsed >= minDelay ? 0 : minDelay - elapsed;
+    autosaveTimerRef.current = setTimeout(async () => {
+      autosaveTimerRef.current = null;
+      if (pendingSaveKeyRef.current && pendingSaveKeyRef.current !== lastSavedRef.current) {
+        await performSave();
+      }
+    }, delay);
+  }, [computeSaveState, performSave]);
+
+  useEffect(() => {
+    scheduleAutosave();
+  }, [code, name, description, overridesRevision, history, future, scheduleAutosave]);
+
+  // Initialize lastSavedRef to current state to avoid initial autosave when nothing changed
+  useEffect(() => {
+    const { saveKey } = computeSaveState();
+    if (!lastSavedRef.current) {
+      lastSavedRef.current = saveKey;
+      lastSavedAtRef.current = Date.now();
+    }
+     
+  }, []);
 
   // Compile + evaluate to component
   const { Component, compileError } = useCompiledComponent(code, overridesRef, setErrorMsg);
@@ -425,9 +490,15 @@ export default function SandboxEditor({
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (activeTab !== "ui") return;
       const isMac = navigator.platform.toLowerCase().includes("mac");
       const mod = isMac ? e.metaKey : e.ctrlKey;
+      // Save shortcut
+      if (mod && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        performSave({ manual: true });
+        return;
+      }
+      if (activeTab !== "ui") return;
       if (mod && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
         e.preventDefault();
         undo();
@@ -441,7 +512,7 @@ export default function SandboxEditor({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeTab, undo, redo]);
+  }, [activeTab, undo, redo, performSave]);
 
   return (
     <div ref={splitRef} className="items-start gap-4 xl:flex">
@@ -489,6 +560,7 @@ export default function SandboxEditor({
                 await navigator.clipboard.writeText(toCopy);
                 toast.success(withOverrides ? "Copied TSX with overrides" : "Copied TSX");
               }}
+              onClickSave={() => performSave({ manual: true })}
             />
           </div>
         </div>
@@ -498,6 +570,7 @@ export default function SandboxEditor({
               value={code}
               onChange={setCode}
               fileName={`${(name || "Component").replace(/\s+/g, "")}.tsx`}
+              onSave={() => performSave({ manual: true })}
             />
           </div>
         )}

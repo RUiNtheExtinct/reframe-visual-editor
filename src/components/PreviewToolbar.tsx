@@ -54,6 +54,7 @@ export type PreviewToolbarProps = {
   onChangeTab: (tab: EditorTab) => void;
   copyButtonText?: string;
   onClickCopy: () => void | Promise<void>;
+  onClickSave?: () => void | Promise<void>;
 };
 
 export default function PreviewToolbar(props: PreviewToolbarProps) {
@@ -76,6 +77,7 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
     onChangeTab,
     copyButtonText = "Copy TSX",
     onClickCopy,
+    onClickSave,
   } = props;
 
   return (
@@ -134,14 +136,14 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
         )}
       </div>
 
-      <TooltipProvider delayDuration={500}>
+      <TooltipProvider delayDuration={1000}>
         <div className="hidden xl:flex items-center gap-1">
           {typeof showPreviewFrame === "boolean" && onTogglePreviewFrame && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <Button
                   className={cn(
-                    "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center",
+                    "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center cursor-pointer",
                     showPreviewFrame
                       ? "bg-green-400 dark:bg-green-900 hover:bg-accent dark:hover:bg-accent"
                       : "hover:bg-accent dark:hover:bg-accent"
@@ -154,7 +156,7 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
                   ) : (
                     <Square className="h-4 w-4" />
                   )}
-                </button>
+                </Button>
               </TooltipTrigger>
               <TooltipContent>
                 {showPreviewFrame ? "Hide preview frame" : "Show preview frame"}
@@ -163,9 +165,9 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <Button
                 className={cn(
-                  "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center",
+                  "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center cursor-pointer",
                   selectionEnabled
                     ? "bg-green-400 dark:bg-green-900 hover:bg-accent dark:hover:bg-accent"
                     : "hover:bg-accent dark:hover:bg-accent"
@@ -174,7 +176,7 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
                 aria-label={selectionEnabled ? "Disable selection" : "Enable selection"}
               >
                 <Crosshair className="h-4 w-4" />
-              </button>
+              </Button>
             </TooltipTrigger>
             <TooltipContent>
               {selectionEnabled ? "Disable selection" : "Enable selection"}
@@ -182,9 +184,9 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <Button
                 className={cn(
-                  "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center hover:bg-accent",
+                  "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center hover:bg-accent cursor-pointer",
                   isSplitLocked
                     ? "bg-green-400 dark:bg-green-900 hover:bg-accent dark:hover:bg-accent"
                     : "hover:bg-accent dark:hover:bg-accent"
@@ -193,15 +195,15 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
                 aria-label={isSplitLocked ? "Unlock layout" : "Lock layout"}
               >
                 {isSplitLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-              </button>
+              </Button>
             </TooltipTrigger>
             <TooltipContent>{isSplitLocked ? "Unlock layout" : "Lock layout"}</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <Button
                 className={cn(
-                  "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center",
+                  "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center cursor-pointer",
                   isSplitLocked
                     ? "opacity-50 cursor-not-allowed"
                     : "hover:bg-accent dark:hover:bg-accent"
@@ -213,7 +215,7 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
                 disabled={isSplitLocked}
               >
                 <RotateCcw className="h-4 w-4" />
-              </button>
+              </Button>
             </TooltipTrigger>
             <TooltipContent>
               {isSplitLocked ? "Unlock layout to reset" : "Reset Layout"}
@@ -236,7 +238,7 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
         </button>
         <button
           className={cn(
-            "w-18 justify-center px-3 py-1.5 text-xs rounded-[6px] inline-flex items-center gap-1",
+            "w-18 justify-center px-3 py-1.5 text-xs rounded-[6px] inline-flex items-center gap-1 cursor-pointer",
             activeTab === "code"
               ? "bg-green-100 text-green-700 border border-green-300 dark:bg-green-900/30 dark:text-green-200 dark:border-green-800"
               : "text-foreground/60"
@@ -247,8 +249,24 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
         </button>
       </div>
 
-      <Button variant="outline" className="inline-flex items-center gap-1" onClick={onClickCopy}>
+      <Button
+        variant="outline"
+        className="inline-flex items-center gap-1 cursor-pointer"
+        onClick={onClickCopy}
+      >
         {copyButtonText}
+      </Button>
+
+      <Button
+        className={cn(
+          "inline-flex items-center gap-1 cursor-pointer",
+          "bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+        )}
+        onClick={() => onClickSave && onClickSave()}
+        aria-label="Save Changes"
+        title="Save Changes"
+      >
+        Save Changes
       </Button>
     </div>
   );

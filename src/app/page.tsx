@@ -90,18 +90,18 @@ export default async function Home() {
                   key={c.componentId}
                   className="group overflow-hidden rounded-xl border bg-card hover:shadow-sm transition-shadow"
                 >
-                  <div className="p-4">
+                  <div className="p-4 flex flex-col">
                     <a
                       className="font-medium truncate group-hover:text-foreground/90"
                       href={`/preview/${c.componentId}`}
                     >
                       {c.name ?? c.componentId}
                     </a>
-                    {c.description && (
-                      <div className="text-xs text-muted-foreground truncate mt-0.5">
-                        {c.description}
-                      </div>
-                    )}
+
+                    <div className="text-xs text-muted-foreground truncate mt-0.5">
+                      {c.description ?? "N/A"}
+                    </div>
+
                     <Link
                       className="mt-3 inline-flex text-sm underline decoration-dotted"
                       href={`/preview/${c.componentId}`}
