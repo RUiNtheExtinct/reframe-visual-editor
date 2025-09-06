@@ -87,6 +87,17 @@ export default function SandboxEditor({
   );
   const [customPreviewWidth, setCustomPreviewWidth] = useState<number>(1280);
   const [customPreviewHeight, setCustomPreviewHeight] = useState<number>(800);
+  const [isDesktop, setIsDesktop] = useState<boolean>(false);
+
+  useEffect(() => {
+    // Match Tailwind's xl breakpoint (min-width: 1280px)
+    const mql = window.matchMedia("(min-width: 1280px)");
+    const handler = (e: MediaQueryListEvent | MediaQueryList) => setIsDesktop((e as any).matches);
+    setIsDesktop(mql.matches);
+    mql.addEventListener("change", handler as any);
+    return () => mql.removeEventListener("change", handler as any);
+  }, []);
+
   useEffect(() => {
     const update = () => {
       const el = splitRef.current;
@@ -326,7 +337,6 @@ export default function SandboxEditor({
       lastSavedRef.current = saveKey;
       lastSavedAtRef.current = Date.now();
     }
-     
   }, []);
 
   // Compile + evaluate to component
@@ -516,8 +526,14 @@ export default function SandboxEditor({
 
   return (
     <div ref={splitRef} className="items-start gap-4 xl:flex">
-      <section className="space-y-3" style={{ width: leftWidth, flex: "0 0 auto" }}>
-        <div className="flex items-center justify-between">
+      <section
+        className="space-y-3"
+        style={{
+          width: isDesktop ? leftWidth : undefined,
+          flex: isDesktop ? "0 0 auto" : undefined,
+        }}
+      >
+        <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-2 px-1">
             <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-200 ring-1 ring-red-800/60">
               Sandbox Preview
@@ -530,7 +546,7 @@ export default function SandboxEditor({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="w-full xl:w-auto flex flex-wrap items-center gap-2 justify-start xl:justify-end">
             <PreviewToolbar
               previewDevice={previewDevice}
               onPreviewDeviceChange={(v) => setPreviewDevice(v)}
@@ -601,7 +617,10 @@ export default function SandboxEditor({
               }}
             >
               <PreviewSurface onShadowRootReady={(r) => (shadowRootRef.current = r)}>
-                <div key={previewKey} className="p-6 min-h-[730px]">
+                <div
+                  key={previewKey}
+                  className="p-6 min-h-[480px] sm:min-h-[600px] xl:min-h-[730px]"
+                >
                   {/* Inject overrides style tag */}
                   <style suppressHydrationWarning>{renderOverridesCss(overridesRef.current)}</style>
                   {Component ? (
@@ -739,7 +758,7 @@ export default function SandboxEditor({
             </div>
             {/* In-preview actions */}
             {selectedSelector && (
-              <div className="flex items-center justify-between gap-2 border-t px-3 py-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between flex-wrap border-t px-3 py-2">
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"

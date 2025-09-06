@@ -81,7 +81,7 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
   } = props;
 
   return (
-    <div className={cn("flex items-center gap-2", className)}>
+    <div className={cn("flex flex-wrap items-center gap-2 w-full xl:w-auto", className)}>
       <div className="hidden xl:flex items-center gap-2">
         <Select
           value={previewDevice}
@@ -93,22 +93,22 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
           <SelectContent>
             <SelectItem value="desktop">
               <div className="flex items-center gap-2">
-                <Monitor className="h-4 w-4" /> <span>Desktop</span>
+                <Monitor className="size-4" /> <span>Desktop</span>
               </div>
             </SelectItem>
             <SelectItem value="tablet">
               <div className="flex items-center gap-2">
-                <Tablet className="h-4 w-4" /> <span>Tablet</span>
+                <Tablet className="size-4" /> <span>Tablet</span>
               </div>
             </SelectItem>
             <SelectItem value="mobile">
               <div className="flex items-center gap-2">
-                <Smartphone className="h-4 w-4" /> <span>Mobile</span>
+                <Smartphone className="size-4" /> <span>Mobile</span>
               </div>
             </SelectItem>
             <SelectItem value="custom">
               <div className="flex items-center gap-2">
-                <SquareDashed className="h-4 w-4" /> <span>Custom…</span>
+                <SquareDashed className="size-4" /> <span>Custom…</span>
               </div>
             </SelectItem>
           </SelectContent>
@@ -152,9 +152,9 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
                   aria-label={showPreviewFrame ? "Hide preview frame" : "Show preview frame"}
                 >
                   {showPreviewFrame ? (
-                    <CheckSquareIcon className="h-4 w-4" />
+                    <CheckSquareIcon className="size-4 text-black dark:text-white" />
                   ) : (
-                    <Square className="h-4 w-4" />
+                    <Square className="size-4 text-black dark:text-white" />
                   )}
                 </Button>
               </TooltipTrigger>
@@ -175,7 +175,7 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
                 onClick={onToggleSelection}
                 aria-label={selectionEnabled ? "Disable selection" : "Enable selection"}
               >
-                <Crosshair className="h-4 w-4" />
+                <Crosshair className="size-4 text-black dark:text-white" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -194,7 +194,11 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
                 onClick={onToggleSplitLock}
                 aria-label={isSplitLocked ? "Unlock layout" : "Lock layout"}
               >
-                {isSplitLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                {isSplitLocked ? (
+                  <Lock className="size-4 text-black dark:text-white" />
+                ) : (
+                  <Unlock className="size-4 text-black dark:text-white" />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent>{isSplitLocked ? "Unlock layout" : "Lock layout"}</TooltipContent>
@@ -214,7 +218,7 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
                 aria-label={isSplitLocked ? "Unlock layout to reset" : "Reset Layout"}
                 disabled={isSplitLocked}
               >
-                <RotateCcw className="h-4 w-4" />
+                <RotateCcw className="size-4 text-black dark:text-white" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -224,7 +228,7 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
         </div>
       </TooltipProvider>
 
-      <div className="inline-flex items-center rounded-md border bg-card p-0.5">
+      <div className="inline-flex items-center rounded-md border bg-card p-0.5 shrink-0">
         <button
           className={cn(
             "w-18 justify-center px-3 py-1.5 text-xs rounded-[6px] inline-flex items-center gap-1",
@@ -234,7 +238,7 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
           )}
           onClick={() => onChangeTab("ui")}
         >
-          <Eye className="h-4 w-4" /> UI
+          <Eye className="size-4" /> UI
         </button>
         <button
           className={cn(
@@ -245,13 +249,13 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
           )}
           onClick={() => onChangeTab("code")}
         >
-          <Code2 className="h-4 w-4" /> Code
+          <Code2 className="size-4" /> Code
         </button>
       </div>
 
       <Button
         variant="outline"
-        className="inline-flex items-center gap-1 cursor-pointer"
+        className="inline-flex items-center gap-1 cursor-pointer shrink-0"
         onClick={onClickCopy}
       >
         {copyButtonText}
@@ -259,7 +263,7 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
 
       <Button
         className={cn(
-          "inline-flex items-center gap-1 cursor-pointer",
+          "inline-flex items-center gap-1 cursor-pointer shrink-0",
           "bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
         )}
         onClick={() => onClickSave && onClickSave()}
