@@ -30,7 +30,7 @@ export default async function PreviewPage({ params }: { params: { id: string } }
 
   return (
     <div className="min-h-screen px-6 py-8 sm:px-12">
-      <header className="mx-auto flex max-w-7xl items-center justify-between">
+      <header className="mx-auto flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
           <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-200 ring-1 ring-red-800/60">
             Sandbox Preview
@@ -57,7 +57,7 @@ export default async function PreviewPage({ params }: { params: { id: string } }
         </div>
       </header>
 
-      <div className="mx-auto mt-6 max-w-7xl overflow-hidden rounded-2xl">
+      <div className="mx-auto mt-6 overflow-hidden rounded-2xl">
         <SandboxEditor
           id={comp.componentId}
           initialSource={comp.source ?? serializeTreeToSource(comp.tree, comp.name)}

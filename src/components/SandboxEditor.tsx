@@ -19,7 +19,18 @@ import { api } from "@/lib/api";
 import { parseJsxToTree } from "@/lib/serializer";
 import { useMutation } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Clipboard, Code2, Copy, Eye, Redo2, Trash2, Undo2 } from "lucide-react";
+import {
+  Clipboard,
+  Code2,
+  Copy,
+  Eye,
+  Lock,
+  Redo2,
+  RotateCcw,
+  Trash2,
+  Undo2,
+  Unlock,
+} from "lucide-react";
 import * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -69,6 +80,59 @@ export default function SandboxEditor({
   const [history, setHistory] = useState<Overrides[]>([]);
   const [future, setFuture] = useState<Overrides[]>([]);
   const dragStartMarginsRef = useRef<{ marginLeft: number; marginTop: number } | null>(null);
+  const splitRef = useRef<HTMLDivElement | null>(null);
+  const [leftWidth, setLeftWidth] = useState<number>(0);
+  const [isDraggingSplit, setIsDraggingSplit] = useState<boolean>(false);
+  const [isSplitLocked, setIsSplitLocked] = useState<boolean>(false);
+  useEffect(() => {
+    const update = () => {
+      const el = splitRef.current;
+      if (!el) return;
+      const w = el.getBoundingClientRect().width;
+      if (leftWidth <= 0) {
+        setLeftWidth(Math.round(w * 0.75));
+        return;
+      }
+      const desired = Math.min(Math.max(leftWidth, 320), Math.max(320, w - 320));
+      if (desired !== leftWidth) setLeftWidth(desired);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [leftWidth]);
+  const onSplitPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (isSplitLocked) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const startX = e.clientX;
+      const startWidth = leftWidth;
+      setIsDraggingSplit(true);
+      const onMove = (ev: PointerEvent) => {
+        const root = splitRef.current;
+        if (!root) return;
+        const total = root.getBoundingClientRect().width;
+        const dx = ev.clientX - startX;
+        const next = Math.min(Math.max(startWidth + dx, 320), Math.max(320, total - 320));
+        setLeftWidth(next);
+      };
+      const onUp = () => {
+        setIsDraggingSplit(false);
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp, { once: true });
+    },
+    [leftWidth, isSplitLocked]
+  );
+
+  const handleResetSplit = useCallback(() => {
+    const root = splitRef.current;
+    if (!root) return;
+    const total = root.getBoundingClientRect().width;
+    setLeftWidth(Math.round(total * 0.75));
+  }, []);
 
   // Persist undo/redo stacks across reloads per component id
   useEffect(() => {
@@ -354,8 +418,8 @@ export default function SandboxEditor({
   }, [activeTab, undo, redo]);
 
   return (
-    <div className="grid grid-cols-12 gap-4 items-start">
-      <div className="col-span-12 xl:col-span-8 space-y-3">
+    <div ref={splitRef} className="items-start gap-4 xl:flex">
+      <section className="space-y-3" style={{ width: leftWidth, flex: "0 0 auto" }}>
         <div className="flex items-center justify-between">
           <div className="inline-flex items-center gap-2 rounded-md border bg-card px-2 py-1">
             <span
@@ -364,6 +428,29 @@ export default function SandboxEditor({
             <span className="text-xs text-foreground/80">{status}</span>
           </div>
           <div className="flex items-center gap-2">
+            <div className="hidden xl:flex items-center gap-1">
+              <button
+                className="h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center hover:bg-accent"
+                onClick={() => setIsSplitLocked((v) => !v)}
+                title={isSplitLocked ? "Unlock layout" : "Lock layout"}
+                aria-label={isSplitLocked ? "Unlock layout" : "Lock layout"}
+              >
+                {isSplitLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+              </button>
+              <button
+                className={`h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center ${
+                  isSplitLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-accent"
+                }`}
+                onClick={() => {
+                  if (!isSplitLocked) handleResetSplit();
+                }}
+                title={isSplitLocked ? "Unlock layout to reset" : "Reset to 3:1"}
+                aria-label={isSplitLocked ? "Unlock layout to reset" : "Reset to 3:1"}
+                disabled={isSplitLocked}
+              >
+                <RotateCcw className="h-4 w-4" />
+              </button>
+            </div>
             <div className="inline-flex items-center rounded-md border bg-card p-0.5">
               <button
                 className={`px-3 py-1.5 text-xs rounded-[6px] inline-flex items-center gap-1 ${
@@ -650,8 +737,40 @@ export default function SandboxEditor({
             )}
           </div>
         )}
+      </section>
+      {/* Split handle (desktop only) */}
+      <div
+        className="hidden xl:block select-none"
+        onPointerDown={onSplitPointerDown}
+        style={{
+          width: 10,
+          cursor: isSplitLocked ? "not-allowed" : "col-resize",
+          flex: "0 0 auto",
+          alignSelf: "stretch",
+          background: isSplitLocked
+            ? "linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(255,255,255,0.02))"
+            : isDraggingSplit
+              ? "linear-gradient(to bottom, rgba(255,255,255,0.12), rgba(255,255,255,0.04))"
+              : "linear-gradient(to bottom, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
+          border: "1px solid rgba(255,255,255,0.10)",
+          boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.25)",
+          borderRadius: 6,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        aria-label="Resize preview/inspector"
+      >
+        <div
+          style={{
+            width: 4,
+            height: 36,
+            borderRadius: 2,
+            background: isSplitLocked ? "rgba(125,125,125,0.35)" : "rgba(125,125,125,0.55)",
+          }}
+        />
       </div>
-      <div className="col-span-12 xl:col-span-4 space-y-4">
+      <section className="space-y-4" style={{ flex: "1 1 0%" }}>
         <div className="rounded-xl border p-4 bg-card">
           <h4 className="text-md font-semibold mb-3 text-red-600 dark:text-red-300">Meta</h4>
           <div className="space-y-3">
@@ -979,7 +1098,7 @@ export default function SandboxEditor({
             </p>
           )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

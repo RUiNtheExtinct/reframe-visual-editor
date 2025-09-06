@@ -7,7 +7,7 @@ import Link from "next/link";
 export default function Navbar() {
   return (
     <header className="w-full sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-background/70 border-b">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 px-6 sm:px-12 h-14">
+      <div className="mx-auto flex items-center justify-between gap-4 px-6 sm:px-12 h-14">
         <Link href="/" className="flex items-center gap-2">
           <Image
             src="/icon.webp"

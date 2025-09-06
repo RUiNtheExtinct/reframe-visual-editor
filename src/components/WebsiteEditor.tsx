@@ -15,6 +15,7 @@ import { FONT_OPTIONS } from "@/constants";
 import type { ComponentTree, EditorNode, ElementNode, TextNode } from "@/lib/editorTypes";
 import { parseJsxToTree, serializeTreeToSource } from "@/lib/serializer";
 import { AnimatePresence, motion } from "framer-motion";
+import { Lock, RotateCcw, Unlock } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import PreviewSurface from "./PreviewSurface";
@@ -205,12 +206,92 @@ export default function WebsiteEditor({
     toast.success("Added text element");
   }, [selectedId]);
 
+  // Resizable split between preview and inspector
+  const splitRef = useRef<HTMLDivElement | null>(null);
+  const [leftWidth, setLeftWidth] = useState<number>(0);
+  const [isDraggingSplit, setIsDraggingSplit] = useState<boolean>(false);
+  useEffect(() => {
+    const update = () => {
+      const el = splitRef.current;
+      if (!el) return;
+      const w = el.getBoundingClientRect().width;
+      if (leftWidth <= 0) {
+        setLeftWidth(Math.round(w * 0.75));
+        return;
+      }
+      const desired = Math.min(Math.max(leftWidth, 320), Math.max(320, w - 320));
+      if (desired !== leftWidth) setLeftWidth(desired);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [leftWidth]);
+  const [isSplitLocked, setIsSplitLocked] = useState<boolean>(false);
+  const onSplitPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (isSplitLocked) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const startX = e.clientX;
+      const startWidth = leftWidth;
+      setIsDraggingSplit(true);
+      const onMove = (ev: PointerEvent) => {
+        const root = splitRef.current;
+        if (!root) return;
+        const total = root.getBoundingClientRect().width;
+        const dx = ev.clientX - startX;
+        const next = Math.min(Math.max(startWidth + dx, 320), Math.max(320, total - 320));
+        setLeftWidth(next);
+      };
+      const onUp = () => {
+        setIsDraggingSplit(false);
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp, { once: true });
+    },
+    [leftWidth, isSplitLocked]
+  );
+  const handleResetSplit = useCallback(() => {
+    const root = splitRef.current;
+    if (!root) return;
+    const total = root.getBoundingClientRect().width;
+    setLeftWidth(Math.round(total * 0.75));
+  }, []);
+
   return (
-    <div className="max-w-6xl mx-auto grid grid-cols-12 gap-6 h-[calc(100dvh-140px)] px-1">
-      <div className="col-span-12 lg:col-span-8 rounded-xl border bg-card p-3 overflow-auto transition-shadow duration-200 hover:shadow-lg">
+    <div ref={splitRef} className="max-w-6xl mx-auto px-1 xl:flex gap-6 h-[calc(100dvh-140px)]">
+      <div
+        className="rounded-xl border bg-card p-3 overflow-auto transition-shadow duration-200 hover:shadow-lg"
+        style={{ width: leftWidth, flex: "0 0 auto" }}
+      >
         <div className="flex items-center justify-between px-1 py-2">
           <h2 className="text-sm font-medium text-muted-foreground">{title ?? "Preview"}</h2>
           <div className="flex items-center gap-2">
+            <div className="hidden xl:flex items-center gap-1">
+              <button
+                className="h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center hover:bg-accent"
+                onClick={() => setIsSplitLocked((v) => !v)}
+                title={isSplitLocked ? "Unlock layout" : "Lock layout"}
+                aria-label={isSplitLocked ? "Unlock layout" : "Lock layout"}
+              >
+                {isSplitLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+              </button>
+              <button
+                className={`h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center ${
+                  isSplitLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-accent"
+                }`}
+                onClick={() => {
+                  if (!isSplitLocked) handleResetSplit();
+                }}
+                title={isSplitLocked ? "Unlock layout to reset" : "Reset to 3:1"}
+                aria-label={isSplitLocked ? "Unlock layout to reset" : "Reset to 3:1"}
+                disabled={isSplitLocked}
+              >
+                <RotateCcw className="h-4 w-4" />
+              </button>
+            </div>
             <div className="inline-flex items-center rounded-md border bg-background p-0.5">
               <button
                 className={`px-3 py-1.5 text-xs rounded-[6px] ${
@@ -324,7 +405,41 @@ export default function WebsiteEditor({
           )}
         </div>
       </div>
-      <div className="col-span-12 lg:col-span-4 rounded-xl border bg-card p-4 transition-all duration-200 lg:sticky lg:top-6 h-fit">
+      <div
+        className="hidden xl:block select-none"
+        onPointerDown={onSplitPointerDown}
+        style={{
+          width: 10,
+          cursor: isSplitLocked ? "not-allowed" : "col-resize",
+          flex: "0 0 auto",
+          alignSelf: "stretch",
+          background: isSplitLocked
+            ? "linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(255,255,255,0.02))"
+            : isDraggingSplit
+              ? "linear-gradient(to bottom, rgba(255,255,255,0.12), rgba(255,255,255,0.04))"
+              : "linear-gradient(to bottom, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
+          border: "1px solid rgba(255,255,255,0.10)",
+          boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.25)",
+          borderRadius: 6,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        aria-label="Resize preview/inspector"
+      >
+        <div
+          style={{
+            width: 4,
+            height: 36,
+            borderRadius: 2,
+            background: isSplitLocked ? "rgba(125,125,125,0.35)" : "rgba(125,125,125,0.55)",
+          }}
+        />
+      </div>
+      <div
+        className="rounded-xl border bg-card p-4 transition-all duration-200 xl:sticky xl:top-6 h-fit"
+        style={{ flex: "1 1 0%" }}
+      >
         <h3 className="text-base font-semibold mb-4">Inspector</h3>
         {/* Meta fields */}
         <div className="mb-4 space-y-3">
