@@ -1,10 +1,13 @@
 import SandboxEditor from "@/components/SandboxEditor";
-import type { ComponentTree } from "@/lib/editorTypes";
+import { authOptions } from "@/lib/auth";
 import { serializeTreeToSource } from "@/lib/serializer";
 import { getComponent } from "@/lib/store";
+import type { ComponentTree } from "@/types/editor";
+import { getServerSession } from "next-auth";
+import UnsavedPreviewClient from "./UnsavedPreviewClient";
 
-async function getData(id: string) {
-  const comp = await getComponent(id);
+async function getData(id: string, userId: string | undefined | null) {
+  const comp = await getComponent(id, userId);
   if (!comp) return null;
   return {
     componentId: comp.componentId,
@@ -22,10 +25,16 @@ async function getData(id: string) {
 }
 
 export default async function PreviewPage({ params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as any)?.userId as string | undefined;
+
   const { id } = await params;
 
-  const comp = await getData(id);
-  if (!comp) return <div className="p-8">Not found</div>;
+  const comp = await getData(id, userId);
+
+  if (!comp) {
+    return <UnsavedPreviewClient id={id} />;
+  }
 
   return (
     <div className="min-h-screen px-6 py-8 sm:px-12">

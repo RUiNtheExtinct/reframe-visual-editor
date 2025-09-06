@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentTree, EditorNode, ElementNode, TextNode } from "./editorTypes";
+import type { ComponentTree, EditorNode, ElementNode, TextNode } from "../types/editor";
 
 function createId(): string {
   // Browser crypto is available both on client and server in Next

@@ -1,17 +1,25 @@
 import DeleteComponentButton from "@/components/DeleteComponentButton";
+import { authOptions } from "@/lib/auth";
 import { listComponentsPaginated } from "@/lib/store";
+import { getServerSession } from "next-auth";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export default async function ComponentsPage({
   searchParams,
 }: {
   searchParams: Promise<{ page?: string; q?: string }>;
 }) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as any)?.userId as string | undefined;
+  if (!userId) return redirect("/sign-in");
+
   const { page: pageParam, q: qParam } = await searchParams;
   const page = Math.max(Number(pageParam ?? "1"), 1);
   const q = qParam ?? "";
   const pageSize = 10;
-  const { items, total } = await listComponentsPaginated(page, pageSize, q);
+
+  const { items, total } = await listComponentsPaginated(page, pageSize, userId, q);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (

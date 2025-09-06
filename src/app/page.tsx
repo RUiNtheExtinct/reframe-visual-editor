@@ -1,10 +1,15 @@
 import JsxImportForm from "@/components/JsxImportForm";
+import { authOptions } from "@/lib/auth";
 import { listComponents } from "@/lib/store";
+import { getServerSession } from "next-auth";
 import Image from "next/image";
 import Link from "next/link";
 
 export default async function Home() {
-  const top = await listComponents(6);
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as any)?.userId as string | undefined;
+
+  const top = await listComponents(6, userId);
 
   return (
     <div className="min-h-screen px-6 py-10 sm:px-12">
@@ -79,7 +84,7 @@ export default async function Home() {
               View all
             </Link>
           </div>
-          {top.length === 0 ? (
+          {!userId || top.length === 0 ? (
             <div className="text-sm text-muted-foreground">
               No components yet. Paste one above to get started.
             </div>

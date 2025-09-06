@@ -39,6 +39,7 @@ export type ComponentTree = {
 
 export type StoredComponent = {
   componentId: string;
+  userId: string;
   name?: string;
   source?: string; // original source the user pasted (optional)
   description?: string;

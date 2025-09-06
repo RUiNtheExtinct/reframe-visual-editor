@@ -1,8 +1,9 @@
 "use client";
 
 import CodeEditor from "@/components/CodeEditor";
-import { api } from "@/lib/api";
+import { api } from "@/lib/api/component/component.service";
 import { parseJsxToTree } from "@/lib/serializer";
+import { useIsAuthenticated } from "@/stores";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -30,6 +31,7 @@ export default function JsxImportForm() {
   const [error, setError] = useState<string | null>(null);
   const [description, setDescription] = useState<string>("");
   const router = useRouter();
+  const isAuthed = useIsAuthenticated();
 
   const createMutation = useMutation({
     mutationFn: api.createComponent,
@@ -38,6 +40,7 @@ export default function JsxImportForm() {
       router.push(`/preview/${data.component.componentId}`);
     },
     onError: (err: unknown) => {
+      console.error(err);
       const message = err instanceof Error ? err.message : "Something went wrong";
       setError(message);
       toast.error(message);
@@ -50,6 +53,19 @@ export default function JsxImportForm() {
     setError(null);
     try {
       const tree = await parseJsxToTree(code);
+      if (!isAuthed) {
+        const id = `unsaved-${crypto.randomUUID()}`;
+        const payload = {
+          tree,
+          source: code,
+          name: "Imported Component",
+          description: description || undefined,
+        } as const;
+        sessionStorage.setItem(`reframe:unsaved:${id}`, JSON.stringify(payload));
+        toast.success("Parsed");
+        router.push(`/preview/${id}`);
+        return;
+      }
       await toast.promise(
         createMutation.mutateAsync({
           tree,

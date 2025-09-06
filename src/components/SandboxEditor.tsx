@@ -14,12 +14,14 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FONT_OPTIONS } from "@/constants";
-import { api } from "@/lib/api";
+import { updateUpdateComponentMutation } from "@/lib/api/component/component.hook";
+import { api } from "@/lib/api/component/component.service";
 import { parseJsxToTree } from "@/lib/serializer";
-import { useMutation } from "@tanstack/react-query";
+import { useUserStore } from "@/stores";
 import clsx from "clsx";
 import { Copy, Redo2, Trash2, Undo2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -55,6 +57,9 @@ export default function SandboxEditor({
   initialName,
   initialDescription,
 }: SandboxEditorProps) {
+  const { user } = useUserStore();
+  const router = useRouter();
+
   const [code, setCode] = useState<string>(() => initialSource || DEFAULT_SNIPPET);
   const [name, setName] = useState<string>(initialName || "");
   const [description, setDescription] = useState<string>(initialDescription || "");
@@ -236,16 +241,7 @@ export default function SandboxEditor({
   }, [applySnapshot, cloneOverrides]);
 
   // Save mutations
-  const updateMutation = useMutation({
-    mutationFn: (payload: { source: string; tree?: any; name?: string; description?: string }) =>
-      api.updateComponent(id, payload),
-    onMutate: () => setStatus("Saving…"),
-    onSuccess: () => {
-      setStatus("Saved ✔");
-      setTimeout(() => setStatus("Auto-saving"), 1500);
-    },
-    onError: () => setStatus("Save failed"),
-  });
+  const updateMutation = updateUpdateComponentMutation(id, setStatus, user?.userId);
 
   // Throttled auto-save with a minimum 15s interval between saves
   const lastSavedRef = useRef<string>("");
@@ -286,6 +282,23 @@ export default function SandboxEditor({
         tree = await parseJsxToTree(sourceToSave);
       } catch {}
       try {
+        if (id.startsWith("unsaved-")) {
+          if (!user?.userId) {
+            throw new Error("Please login to save your changes");
+          }
+          const { component } = await api.createComponent({
+            source: sourceToSave,
+            tree,
+            name: name || undefined,
+            description: description || undefined,
+          });
+          lastSavedRef.current = saveKey;
+          lastSavedAtRef.current = Date.now();
+          pendingSaveKeyRef.current = null;
+          if (manual) toast.success("Saved changes");
+          router.replace(`/preview/${component.componentId}`);
+          return;
+        }
         await updateMutation.mutateAsync({
           source: sourceToSave,
           tree,
@@ -296,8 +309,9 @@ export default function SandboxEditor({
         lastSavedAtRef.current = Date.now();
         pendingSaveKeyRef.current = null;
         if (manual) toast.success("Saved changes");
-      } catch {
-        if (manual) toast.error("Save failed");
+      } catch (e: any) {
+        const msg = e?.message || "Save failed";
+        if (manual) toast.error(msg);
       } finally {
         saveInFlightRef.current = false;
         // If changes accrued during the save, schedule a new autosave respecting the 15s window

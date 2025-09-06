@@ -1,8 +1,8 @@
 /* eslint-disable  @typescript-eslint/no-explicit-any */
 import { getDb } from "@/db";
 import { components } from "@/db/schema";
-import { desc, eq, sql } from "drizzle-orm";
-import type { StoredComponent } from "./editorTypes";
+import { and, desc, eq, sql } from "drizzle-orm";
+import type { StoredComponent } from "../types/editor";
 
 export async function createComponent(
   payload: Omit<StoredComponent, "componentId" | "createdAt" | "updatedAt"> & {
@@ -15,6 +15,7 @@ export async function createComponent(
   const now = new Date().toISOString();
   const comp: StoredComponent = {
     componentId,
+    userId: payload.userId,
     name: payload.name,
     source: payload.source,
     description: payload.description,
@@ -23,6 +24,7 @@ export async function createComponent(
     updatedAt: now,
   };
   await drizzle.insert(components).values({
+    userId: payload.userId,
     componentId,
     name: comp.name ?? (null as any),
     source: comp.source ?? (null as any),
@@ -32,18 +34,23 @@ export async function createComponent(
   return comp;
 }
 
-export async function getComponent(componentId: string): Promise<StoredComponent | null> {
+export async function getComponent(
+  componentId: string,
+  userId: string | undefined | null
+): Promise<StoredComponent | null> {
+  if (!userId) return null;
   const drizzle = getDb();
   if (!drizzle) throw new Error("Database not configured. Set DATABASE_URL.");
   const rows = await drizzle
     .select()
     .from(components)
-    .where(eq(components.componentId, componentId))
+    .where(and(eq(components.componentId, componentId), eq(components.userId, userId)))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
   return {
     componentId: row.componentId,
+    userId: row.userId,
     name: row.name ?? undefined,
     source: row.source ?? undefined,
     description: (row as any).description ?? undefined,
@@ -55,11 +62,13 @@ export async function getComponent(componentId: string): Promise<StoredComponent
 
 export async function updateComponent(
   componentId: string,
+  userId: string | undefined | null,
   partial: Partial<Pick<StoredComponent, "name" | "source" | "description" | "tree">>
 ): Promise<StoredComponent | null> {
+  if (!userId) return null;
   const drizzle = getDb();
   if (!drizzle) throw new Error("Database not configured. Set DATABASE_URL.");
-  const current = await getComponent(componentId);
+  const current = await getComponent(componentId, userId);
   if (!current) return null;
   const updated: StoredComponent = { ...current, ...partial, updatedAt: new Date().toISOString() };
   await drizzle
@@ -71,20 +80,26 @@ export async function updateComponent(
       tree: updated.tree as any,
       updatedAt: new Date(updated.updatedAt),
     })
-    .where(eq(components.componentId, componentId));
+    .where(and(eq(components.componentId, componentId), eq(components.userId, userId)));
   return updated;
 }
 
-export async function listComponents(num: number = 20): Promise<StoredComponent[]> {
+export async function listComponents(
+  num: number = 20,
+  userId: string | undefined | null
+): Promise<StoredComponent[]> {
+  if (!userId) return [];
   const drizzle = getDb();
   if (!drizzle) throw new Error("Database not configured. Set DATABASE_URL.");
   const rows = await drizzle
     .select()
     .from(components)
+    .where(eq(components.userId, userId))
     .orderBy(desc(components.updatedAt))
     .limit(num);
   return rows.map((r) => ({
     componentId: r.componentId,
+    userId: r.userId,
     name: r.name ?? undefined,
     source: r.source ?? undefined,
     description: (r as any).description ?? undefined,
@@ -97,6 +112,7 @@ export async function listComponents(num: number = 20): Promise<StoredComponent[
 export async function listComponentsPaginated(
   page: number,
   pageSize: number,
+  userId: string,
   q?: string
 ): Promise<{ items: StoredComponent[]; total: number; page: number; pageSize: number }> {
   const drizzle = getDb();
@@ -110,7 +126,7 @@ export async function listComponentsPaginated(
         .or((components.source as any).ilike(like as any))
         .or((components as any).description.ilike(like as any))
     : undefined;
-  const base = drizzle.select().from(components);
+  const base = drizzle.select().from(components).where(eq(components.userId, userId));
   const rows = await (where ? (base as any).where(where) : base)
     .orderBy(desc(components.updatedAt))
     .limit(pageSize)
@@ -122,6 +138,7 @@ export async function listComponentsPaginated(
   const total = Number((countRes as any)[0]?.count ?? 0);
   const items: StoredComponent[] = (rows as any[]).map((r) => ({
     componentId: r.componentId,
+    userId: r.userId,
     name: r.name ?? undefined,
     source: r.source ?? undefined,
     description: (r as any).description ?? undefined,
@@ -132,11 +149,17 @@ export async function listComponentsPaginated(
   return { items, total, page, pageSize };
 }
 
-export async function deleteComponent(componentId: string): Promise<boolean> {
+export async function deleteComponent(
+  componentId: string,
+  userId: string | undefined | null
+): Promise<boolean> {
+  if (!userId) return false;
   try {
     const drizzle = getDb();
     if (!drizzle) throw new Error("Database not configured. Set DATABASE_URL.");
-    await drizzle.delete(components).where(eq(components.componentId, componentId));
+    await drizzle
+      .delete(components)
+      .where(and(eq(components.componentId, componentId), eq(components.userId, userId)));
     return true;
   } catch (error) {
     console.error("Error deleting component", error);
