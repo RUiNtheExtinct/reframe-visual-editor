@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 let hasTwindSetup = false;
+let hasShimImported = false;
 
 export default function TwindRuntime() {
   useEffect(() => {
@@ -20,7 +21,10 @@ export default function TwindRuntime() {
           hasTwindSetup = true;
         }
 
-        await import("twind/shim");
+        if (!hasShimImported) {
+          await import("twind/shim");
+          hasShimImported = true;
+        }
       } catch {
         // noop: editor preview will still render with build-time Tailwind CSS
       }

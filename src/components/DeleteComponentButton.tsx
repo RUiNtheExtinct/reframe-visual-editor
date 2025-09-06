@@ -1,5 +1,6 @@
 "use client";
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -25,13 +26,19 @@ export default function DeleteComponentButton({ componentId }: { componentId: st
   };
 
   return (
-    <button
-      onClick={onDelete}
-      className="inline-flex items-center justify-center rounded-md border px-2.5 py-1.5 text-sm hover:bg-orange-200"
-      aria-label="Delete component"
-      title="Delete"
-    >
-      <Trash2 className="size-4 text-red-500 hover:scale-110 transition-transform duration-300 ease-in-out" />
-    </button>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={onDelete}
+            className="inline-flex items-center justify-center rounded-md border px-2.5 py-1.5 text-sm hover:bg-orange-200"
+            aria-label="Delete component"
+          >
+            <Trash2 className="size-4 text-red-500 hover:scale-110 transition-transform duration-300 ease-in-out" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>Delete</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

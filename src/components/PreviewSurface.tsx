@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 type Props = {
@@ -15,7 +15,7 @@ export default function PreviewSurface({ children, className, style, onShadowRoo
   const [shadowRoot, setShadowRoot] = useState<ShadowRoot | null>(null);
   const [mountNode, setMountNode] = useState<HTMLDivElement | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!hostRef.current) return;
     const host = hostRef.current;
     let root = (host as any).shadowRoot as ShadowRoot | null;

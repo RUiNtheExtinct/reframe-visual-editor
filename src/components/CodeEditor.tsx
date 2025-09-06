@@ -4,7 +4,7 @@ import { TAILWIND_SNIPPETS } from "@/constants";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Props = {
   value: string;
@@ -45,6 +45,8 @@ export default function CodeEditor({
     return `max-h-[${maxHeight}px]`;
   }, [maxHeight]);
 
+  const handleChange = useCallback((v: string | undefined) => onChange(v || ""), [onChange]);
+
   if (!mounted) {
     return (
       <div
@@ -69,7 +71,7 @@ export default function CodeEditor({
         defaultLanguage={language}
         path={fileName}
         value={value}
-        onChange={(v) => onChange(v || "")}
+        onChange={handleChange}
         theme={resolvedTheme === "dark" ? "vs-dark" : "light"}
         beforeMount={(monaco) => configureMonaco(monaco)}
         onMount={(editor, monaco) => registerEnhancements(editor, monaco)}
@@ -88,7 +90,9 @@ export default function CodeEditor({
   );
 }
 
+let __monacoConfiguredOnce = false;
 function configureMonaco(monaco: any) {
+  if (__monacoConfiguredOnce) return;
   const common: any = {
     jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
     jsxImportSource: "react",
@@ -154,15 +158,17 @@ declare function tw(strings: TemplateStringsArray, ...exprs: any[]): string;
     sandboxGlobalsDts,
     "file:///__sandbox_globals__.d.ts"
   );
+  __monacoConfiguredOnce = true;
 }
 
+let __tailwindEnhancementsRegistered = false;
 function registerEnhancements(editor: any, monaco: any) {
   // Try to enable Tailwind CSS IntelliSense for Monaco on the fly
   (async () => {
     try {
       const mod: any = await import("monaco-tailwindcss" as any);
       const init = mod?.init || mod?.default || mod?.initialize || mod?.setup;
-      if (typeof init === "function") {
+      if (typeof init === "function" && !__tailwindEnhancementsRegistered) {
         try {
           init(monaco, editor, {
             // Keep default config; Tailwind v4 build still applies, this augments editor UX
@@ -170,6 +176,7 @@ function registerEnhancements(editor: any, monaco: any) {
         } catch {
           // ignore initialization errors
         }
+        __tailwindEnhancementsRegistered = true;
         return;
       }
     } catch {
@@ -177,21 +184,26 @@ function registerEnhancements(editor: any, monaco: any) {
     }
 
     // Fallback: lightweight Tailwind-ish className suggestions
-    monaco.languages.registerCompletionItemProvider("typescript", {
-      triggerCharacters: ['"', "'", " ", "-", ":"],
-      provideCompletionItems(model: any, position: any) {
-        const line = model.getLineContent(position.lineNumber);
-        const upto = line.slice(0, position.column - 1);
-        const isInClassName = /className\s*=\s*(\"[^\"]*|\'[^\']*|\{`[^`]*|\{\"[^\"]*)$/.test(upto);
-        if (!isInClassName) return { suggestions: [] };
-        const suggestions = TAILWIND_SNIPPETS.map((label) => ({
-          label,
-          kind: monaco.languages.CompletionItemKind.Keyword,
-          insertText: label,
-          range: undefined,
-        }));
-        return { suggestions };
-      },
-    });
+    if (!__tailwindEnhancementsRegistered) {
+      monaco.languages.registerCompletionItemProvider("typescript", {
+        triggerCharacters: ['"', "'", " ", "-", ":"],
+        provideCompletionItems(model: any, position: any) {
+          const line = model.getLineContent(position.lineNumber);
+          const upto = line.slice(0, position.column - 1);
+          const isInClassName = /className\s*=\s*(\"[^\"]*|\'[^\']*|\{`[^`]*|\{\"[^\"]*)$/.test(
+            upto
+          );
+          if (!isInClassName) return { suggestions: [] };
+          const suggestions = TAILWIND_SNIPPETS.map((label) => ({
+            label,
+            kind: monaco.languages.CompletionItemKind.Keyword,
+            insertText: label,
+            range: undefined,
+          }));
+          return { suggestions };
+        },
+      });
+      __tailwindEnhancementsRegistered = true;
+    }
   })();
 }
