@@ -1,6 +1,7 @@
 "use client";
 
 import { TAILWIND_SNIPPETS } from "@/constants";
+import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
@@ -17,7 +18,7 @@ const Monaco = dynamic(async () => (await import("@monaco-editor/react")).defaul
   ssr: false,
   loading: () => (
     <div
-      className={`h-[520px] w-full rounded-md border bg-background flex items-center justify-center text-sm text-muted-foreground`}
+      className={`h-[680px] w-full rounded-md border bg-background flex items-center justify-center text-sm text-muted-foreground`}
     >
       Loading editor…
     </div>
@@ -28,7 +29,7 @@ export default function CodeEditor({
   value,
   onChange,
   fileName = "Component.tsx",
-  maxHeight = 520,
+  maxHeight = 680,
   instanceKey,
 }: Props) {
   const [mounted, setMounted] = useState(false);
@@ -40,10 +41,17 @@ export default function CodeEditor({
     [fileName]
   );
 
+  const maxHeightClass = useMemo(() => {
+    return `max-h-[${maxHeight}px]`;
+  }, [maxHeight]);
+
   if (!mounted) {
     return (
       <div
-        className={`h-[${maxHeight}px] w-full rounded-md border bg-background flex items-center justify-center text-sm text-muted-foreground`}
+        className={cn(
+          "w-full rounded-md border bg-background flex items-center justify-center text-sm text-muted-foreground",
+          maxHeightClass
+        )}
       >
         Loading editor…
       </div>

@@ -747,13 +747,7 @@ export default function SandboxEditor({
           cursor: isSplitLocked ? "not-allowed" : "col-resize",
           flex: "0 0 auto",
           alignSelf: "stretch",
-          background: isSplitLocked
-            ? "linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(255,255,255,0.02))"
-            : isDraggingSplit
-              ? "linear-gradient(to bottom, rgba(255,255,255,0.12), rgba(255,255,255,0.04))"
-              : "linear-gradient(to bottom, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
-          border: "1px solid rgba(255,255,255,0.10)",
-          boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.25)",
+          background: "transparent",
           borderRadius: 6,
           display: "flex",
           alignItems: "center",
@@ -763,12 +757,67 @@ export default function SandboxEditor({
       >
         <div
           style={{
-            width: 4,
-            height: 36,
-            borderRadius: 2,
-            background: isSplitLocked ? "rgba(125,125,125,0.35)" : "rgba(125,125,125,0.55)",
+            width: 10,
+            height: 64,
+            borderRadius: 8,
+            background: "rgba(0,0,0,0.08)",
+            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.06)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
-        />
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+            }}
+          >
+            <div
+              style={{
+                width: 4,
+                height: 4,
+                borderRadius: 4,
+                background: isSplitLocked ? "rgba(120,120,120,0.5)" : "rgba(180,180,180,0.9)",
+              }}
+            />
+            <div
+              style={{
+                width: 4,
+                height: 4,
+                borderRadius: 4,
+                background: isSplitLocked ? "rgba(120,120,120,0.5)" : "rgba(180,180,180,0.9)",
+              }}
+            />
+            <div
+              style={{
+                width: 4,
+                height: 4,
+                borderRadius: 4,
+                background: isSplitLocked ? "rgba(120,120,120,0.5)" : "rgba(180,180,180,0.9)",
+              }}
+            />
+            <div
+              style={{
+                width: 4,
+                height: 4,
+                borderRadius: 4,
+                background: isSplitLocked ? "rgba(120,120,120,0.5)" : "rgba(180,180,180,0.9)",
+              }}
+            />
+            <div
+              style={{
+                width: 4,
+                height: 4,
+                borderRadius: 4,
+                background: isSplitLocked ? "rgba(120,120,120,0.5)" : "rgba(180,180,180,0.9)",
+              }}
+            />
+          </div>
+        </div>
       </div>
       <section className="space-y-4" style={{ flex: "1 1 0%" }}>
         <div className="rounded-xl border p-4 bg-card">
