@@ -18,7 +18,7 @@ const Monaco = dynamic(async () => (await import("@monaco-editor/react")).defaul
   ssr: false,
   loading: () => (
     <div
-      className={`h-[680px] w-full rounded-md border bg-background flex items-center justify-center text-sm text-muted-foreground`}
+      className={`h-[780px] w-full rounded-md border bg-background flex items-center justify-center text-sm text-muted-foreground`}
     >
       Loading editor…
     </div>
@@ -29,7 +29,7 @@ export default function CodeEditor({
   value,
   onChange,
   fileName = "Component.tsx",
-  maxHeight = 680,
+  maxHeight = 780,
   instanceKey,
 }: Props) {
   const [mounted, setMounted] = useState(false);

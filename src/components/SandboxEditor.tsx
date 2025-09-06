@@ -31,6 +31,7 @@ import {
   Undo2,
   Unlock,
 } from "lucide-react";
+import Link from "next/link";
 import * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -155,45 +156,6 @@ export default function SandboxEditor({
         };
     }
   }, [previewDevice, customPreviewWidth, customPreviewHeight]);
-
-  // Capture rendered HTML and CSS from the shadow root for export
-  const buildPreviewExportTsx = useCallback(() => {
-    const root = shadowRootRef.current as any as ShadowRoot | null;
-    if (!root) return null;
-    // Gather CSS from adoptedStyleSheets and <style> tags
-    const cssParts: string[] = [];
-    try {
-      const sheets = (root as any).adoptedStyleSheets as CSSStyleSheet[] | undefined;
-      if (sheets && Array.isArray(sheets)) {
-        for (const sheet of sheets) {
-          try {
-            const rules = Array.from((sheet as any).cssRules || []) as CSSRule[];
-            cssParts.push(rules.map((r) => r.cssText).join("\n"));
-          } catch {}
-        }
-      }
-    } catch {}
-    try {
-      const styleTags = Array.from(root.querySelectorAll("style")) as HTMLStyleElement[];
-      for (const s of styleTags) cssParts.push(s.textContent || "");
-    } catch {}
-
-    // Capture HTML (excluding style/link tags) from the preview mount
-    const mount = root.querySelector('div[data-preview-mount="1"]') as HTMLDivElement | null;
-    if (!mount) return null;
-    const clone = mount.cloneNode(true) as HTMLDivElement;
-    try {
-      clone
-        .querySelectorAll('style,link[rel="stylesheet"]')
-        .forEach((n) => n.parentElement?.removeChild(n));
-    } catch {}
-    const html = clone.innerHTML;
-    const css = cssParts.join("\n\n");
-
-    const componentName = (name || "Component").replace(/\s+/g, "").replace(/[^A-Za-z0-9_]/g, "");
-    const tsx = `export default function ${componentName}() {\n  return (\n    <div>\n      <style>{${JSON.stringify(css)}}</style>\n      <div dangerouslySetInnerHTML={{ __html: ${JSON.stringify(html)} }} />\n    </div>\n  );\n}`;
-    return tsx;
-  }, [name]);
 
   // Persist undo/redo stacks across reloads per component id
   useEffect(() => {
@@ -482,12 +444,18 @@ export default function SandboxEditor({
     <div ref={splitRef} className="items-start gap-4 xl:flex">
       <section className="space-y-3" style={{ width: leftWidth, flex: "0 0 auto" }}>
         <div className="flex items-center justify-between">
-          <div className="inline-flex items-center gap-2 rounded-md border bg-card px-2 py-1">
-            <span
-              className={`h-2 w-2 rounded-full ${status.startsWith("Saved") ? "bg-green-500" : status.includes("fail") ? "bg-red-500" : "bg-red-400"}`}
-            />
-            <span className="text-xs text-foreground/80">{status}</span>
+          <div className="flex items-center gap-2 px-1">
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-200 ring-1 ring-red-800/60">
+              Sandbox Preview
+            </span>
+            <div className="inline-flex items-center gap-2 rounded-md border bg-card px-2 py-1">
+              <span
+                className={`h-2 w-2 rounded-full ${status.startsWith("Saved") ? "bg-green-500" : status.includes("fail") ? "bg-red-500" : "bg-red-400"}`}
+              />
+              <span className="text-xs text-foreground/80">{status}</span>
+            </div>
           </div>
+
           <div className="flex items-center gap-2">
             <div className="hidden xl:flex items-center gap-2">
               <Select value={previewDevice} onValueChange={(v) => setPreviewDevice(v as any)}>
@@ -622,7 +590,7 @@ export default function SandboxEditor({
               }}
             >
               <PreviewSurface onShadowRootReady={(r) => (shadowRootRef.current = r)}>
-                <div key={previewKey} className="p-6 min-h-[640px]">
+                <div key={previewKey} className="p-6 min-h-[750px]">
                   {/* Inject overrides style tag */}
                   <style suppressHydrationWarning>{renderOverridesCss(overridesRef.current)}</style>
                   {Component ? (
@@ -939,7 +907,20 @@ export default function SandboxEditor({
       </div>
       <section className="space-y-4" style={{ flex: "1 1 0%" }}>
         <div className="rounded-xl border p-4 bg-card">
-          <h4 className="text-md font-semibold mb-3 text-red-600 dark:text-red-300">Meta</h4>
+          <div className="flex flex-row items-center justify-between mb-3">
+            <h4 className="text-md font-semibold text-red-600 dark:text-red-300">Meta</h4>
+            <div className="flex flex-row items-center gap-3">
+              <Link
+                className="text-sm underline decoration-dotted text-red-700 dark:text-red-200"
+                href="/components"
+              >
+                Components
+              </Link>
+              <Link className="text-sm text-red-600 dark:text-red-400 hover:underline" href="/">
+                New import
+              </Link>
+            </div>
+          </div>
           <div className="space-y-3">
             <label className="block text-xs text-foreground/70">Name</label>
             <input
@@ -1749,7 +1730,7 @@ function buildTsxWithStyleOverrides(
   const hasDefault = /export\s+default\s+/m.test(cleanedSource);
   const scopeAttr = `[data-reframe-scope="${wrapperName}"]`;
   const css = renderOverridesCssWithScope(overrides, scopeAttr);
-  const suffix = `\n\nexport default function ${wrapperName}() {\n  return (\n    <div data-reframe-scope="${wrapperName}">\n      <div className=\"p-6 min-h-[640px]\">\n        <style>{${JSON.stringify(css)}}<\/style>\n        <div data-sandbox-root>\n          <${innerName} \/>\n        <\/div>\n      <\/div>\n    <\/div>\n  );\n}`;
+  const suffix = `\n\nexport default function ${wrapperName}() {\n  return (\n    <div data-reframe-scope="${wrapperName}">\n      <div className=\"p-6 min-h-[750px]\">\n        <style>{${JSON.stringify(css)}}<\/style>\n        <div data-sandbox-root>\n          <${innerName} \/>\n        <\/div>\n      <\/div>\n    <\/div>\n  );\n}`;
   // Avoid duplicate default exports; if source already has default, just return cleaned source
   return hasDefault ? cleanedSource : `${cleanedSource}${suffix}`;
 }

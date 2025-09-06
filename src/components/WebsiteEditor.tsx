@@ -317,7 +317,7 @@ export default function WebsiteEditor({
   }, [name]);
 
   return (
-    <div ref={splitRef} className="max-w-6xl mx-auto px-1 xl:flex gap-6 h-[calc(100dvh-140px)]">
+    <div ref={splitRef} className="max-w-6xl mx-auto px-1 xl:flex gap-6">
       <div
         className="rounded-xl border bg-card p-3 overflow-auto transition-shadow duration-200 hover:shadow-lg"
         style={{ width: leftWidth, flex: "0 0 auto" }}
@@ -433,7 +433,7 @@ export default function WebsiteEditor({
         >
           {activeTab === "design" ? (
             <PreviewSurface onShadowRootReady={(r) => (previewShadowRootRef.current = r)}>
-              <div className="p-6 min-h-[520px]">
+              <div className="p-6 min-h-[750px]">
                 <div className="text-xs text-muted-foreground mb-2">Click elements to edit</div>
                 {renderNode(currentTree.root, selectedId, setSelectedId)}
               </div>
