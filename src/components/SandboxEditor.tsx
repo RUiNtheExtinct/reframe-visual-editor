@@ -17,16 +17,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FONT_OPTIONS } from "@/constants";
 import { api } from "@/lib/api";
 import { parseJsxToTree } from "@/lib/serializer";
+import { cn } from "@/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import clsx from "clsx";
 import {
+  CheckSquareIcon,
   Clipboard,
   Code2,
   Copy,
   Eye,
   Lock,
+  Monitor,
   Redo2,
   RotateCcw,
+  Smartphone,
+  Square,
+  Tablet,
   Trash2,
   Undo2,
   Unlock,
@@ -69,6 +75,7 @@ export default function SandboxEditor({
   const [overridesRevision, setOverridesRevision] = useState<number>(0);
   const [previewRevision, setPreviewRevision] = useState<number>(0);
   const [previewKey, setPreviewKey] = useState<number>(0);
+  const [showPreviewFrame, setShowPreviewFrame] = useState<boolean>(true);
 
   // Preview + selection
   const shadowRootRef = useRef<ShadowRoot | null>(null);
@@ -463,10 +470,26 @@ export default function SandboxEditor({
                   <SelectValue placeholder="Preview device" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="desktop">Desktop</SelectItem>
-                  <SelectItem value="tablet">Tablet</SelectItem>
-                  <SelectItem value="mobile">Mobile</SelectItem>
-                  <SelectItem value="custom">Custom…</SelectItem>
+                  <SelectItem value="desktop">
+                    <div className="flex items-center gap-2">
+                      <Monitor className="h-4 w-4" /> <span>Desktop</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="tablet">
+                    <div className="flex items-center gap-2">
+                      <Tablet className="h-4 w-4" /> <span>Tablet</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="mobile">
+                    <div className="flex items-center gap-2">
+                      <Smartphone className="h-4 w-4" /> <span>Mobile</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="custom">
+                    <div className="flex items-center gap-2">
+                      <Square className="h-4 w-4" /> <span>Custom…</span>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
               {previewDevice === "custom" && (
@@ -497,7 +520,28 @@ export default function SandboxEditor({
             </div>
             <div className="hidden xl:flex items-center gap-1">
               <button
-                className="h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center hover:bg-accent"
+                className={`h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center ${
+                  showPreviewFrame
+                    ? "bg-green-400 dark:bg-green-900/30 hover:bg-accent"
+                    : "hover:bg-accent"
+                }`}
+                onClick={() => setShowPreviewFrame((v) => !v)}
+                title={showPreviewFrame ? "Hide preview frame" : "Show preview frame"}
+                aria-label={showPreviewFrame ? "Hide preview frame" : "Show preview frame"}
+              >
+                {showPreviewFrame ? (
+                  <CheckSquareIcon className="h-4 w-4" />
+                ) : (
+                  <Square className="h-4 w-4" />
+                )}
+              </button>
+              <button
+                className={cn(
+                  "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center hover:bg-accent",
+                  isSplitLocked
+                    ? "bg-green-400 dark:bg-green-900/30 hover:bg-accent"
+                    : "hover:bg-accent"
+                )}
                 onClick={() => setIsSplitLocked((v) => !v)}
                 title={isSplitLocked ? "Unlock layout" : "Lock layout"}
                 aria-label={isSplitLocked ? "Unlock layout" : "Lock layout"}
@@ -511,8 +555,8 @@ export default function SandboxEditor({
                 onClick={() => {
                   if (!isSplitLocked) handleResetSplit();
                 }}
-                title={isSplitLocked ? "Unlock layout to reset" : "Reset to 3:1"}
-                aria-label={isSplitLocked ? "Unlock layout to reset" : "Reset to 3:1"}
+                title={isSplitLocked ? "Unlock layout to reset" : "Reset Layout"}
+                aria-label={isSplitLocked ? "Unlock layout to reset" : "Reset Layout"}
                 disabled={isSplitLocked}
               >
                 <RotateCcw className="h-4 w-4" />
@@ -579,7 +623,13 @@ export default function SandboxEditor({
             </div>
             <div
               ref={containerRef}
-              className="relative"
+              className={twMerge(
+                clsx(
+                  "relative",
+                  showPreviewFrame &&
+                    "rounded-lg ring-2 ring-red-900/40 dark:ring-red-700/40 bg-background"
+                )
+              )}
               style={{
                 width: Math.min(getPreviewSize().width, (leftWidth || 1200) - 24),
                 marginLeft: "auto",
@@ -590,7 +640,7 @@ export default function SandboxEditor({
               }}
             >
               <PreviewSurface onShadowRootReady={(r) => (shadowRootRef.current = r)}>
-                <div key={previewKey} className="p-6 min-h-[750px]">
+                <div key={previewKey} className="p-6 min-h-[730px]">
                   {/* Inject overrides style tag */}
                   <style suppressHydrationWarning>{renderOverridesCss(overridesRef.current)}</style>
                   {Component ? (
@@ -1730,7 +1780,7 @@ function buildTsxWithStyleOverrides(
   const hasDefault = /export\s+default\s+/m.test(cleanedSource);
   const scopeAttr = `[data-reframe-scope="${wrapperName}"]`;
   const css = renderOverridesCssWithScope(overrides, scopeAttr);
-  const suffix = `\n\nexport default function ${wrapperName}() {\n  return (\n    <div data-reframe-scope="${wrapperName}">\n      <div className=\"p-6 min-h-[750px]\">\n        <style>{${JSON.stringify(css)}}<\/style>\n        <div data-sandbox-root>\n          <${innerName} \/>\n        <\/div>\n      <\/div>\n    <\/div>\n  );\n}`;
+  const suffix = `\n\nexport default function ${wrapperName}() {\n  return (\n    <div data-reframe-scope="${wrapperName}">\n      <div className=\"p-6 min-h-[730px]\">\n        <style>{${JSON.stringify(css)}}<\/style>\n        <div data-sandbox-root>\n          <${innerName} \/>\n        <\/div>\n      <\/div>\n    <\/div>\n  );\n}`;
   // Avoid duplicate default exports; if source already has default, just return cleaned source
   return hasDefault ? cleanedSource : `${cleanedSource}${suffix}`;
 }

@@ -379,8 +379,8 @@ export default function WebsiteEditor({
                 onClick={() => {
                   if (!isSplitLocked) handleResetSplit();
                 }}
-                title={isSplitLocked ? "Unlock layout to reset" : "Reset to 3:1"}
-                aria-label={isSplitLocked ? "Unlock layout to reset" : "Reset to 3:1"}
+                title={isSplitLocked ? "Unlock layout to reset" : "Reset Layout"}
+                aria-label={isSplitLocked ? "Unlock layout to reset" : "Reset Layout"}
                 disabled={isSplitLocked}
               >
                 <RotateCcw className="h-4 w-4" />
@@ -433,7 +433,7 @@ export default function WebsiteEditor({
         >
           {activeTab === "design" ? (
             <PreviewSurface onShadowRootReady={(r) => (previewShadowRootRef.current = r)}>
-              <div className="p-6 min-h-[750px]">
+              <div className="p-6 min-h-[730px]">
                 <div className="text-xs text-muted-foreground mb-2">Click elements to edit</div>
                 {renderNode(currentTree.root, selectedId, setSelectedId)}
               </div>
