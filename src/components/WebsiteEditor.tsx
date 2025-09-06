@@ -282,6 +282,40 @@ export default function WebsiteEditor({
     }
   }, [previewDevice, customPreviewWidth, customPreviewHeight]);
 
+  const buildPreviewExportTsx = useCallback(() => {
+    const root = previewShadowRootRef.current as ShadowRoot | null;
+    if (!root) return null;
+    const cssParts: string[] = [];
+    try {
+      const sheets = (root as any).adoptedStyleSheets as CSSStyleSheet[] | undefined;
+      if (sheets && Array.isArray(sheets)) {
+        for (const sheet of sheets) {
+          try {
+            const rules = Array.from((sheet as any).cssRules || []) as CSSRule[];
+            cssParts.push(rules.map((r) => r.cssText).join("\n"));
+          } catch {}
+        }
+      }
+    } catch {}
+    try {
+      const styleTags = Array.from(root.querySelectorAll("style")) as HTMLStyleElement[];
+      for (const s of styleTags) cssParts.push(s.textContent || "");
+    } catch {}
+    const mount = root.querySelector('div[data-preview-mount="1"]') as HTMLDivElement | null;
+    if (!mount) return null;
+    const clone = mount.cloneNode(true) as HTMLDivElement;
+    try {
+      clone
+        .querySelectorAll('style,link[rel="stylesheet"]')
+        .forEach((n) => n.parentElement?.removeChild(n));
+    } catch {}
+    const html = clone.innerHTML;
+    const css = cssParts.join("\n\n");
+    const componentName = (name || "Component").replace(/\s+/g, "").replace(/[^A-Za-z0-9_]/g, "");
+    const tsx = `export default function ${componentName}() {\n  return (\n    <div>\n      <style>{${JSON.stringify(css)}}</style>\n      <div dangerouslySetInnerHTML={{ __html: ${JSON.stringify(html)} }} />\n    </div>\n  );\n}`;
+    return tsx;
+  }, [name]);
+
   return (
     <div ref={splitRef} className="max-w-6xl mx-auto px-1 xl:flex gap-6 h-[calc(100dvh-140px)]">
       <div
@@ -374,9 +408,11 @@ export default function WebsiteEditor({
               variant="outline"
               size="sm"
               onClick={async () => {
-                const src = activeTab === "code" ? code : serializeTreeToSource(currentTree, name);
+                const tsx = buildPreviewExportTsx();
+                const src =
+                  tsx || (activeTab === "code" ? code : serializeTreeToSource(currentTree, name));
                 await navigator.clipboard.writeText(src);
-                toast.success("Copied component TSX");
+                toast.success(tsx ? "Copied snapshot TSX" : "Copied component TSX");
               }}
             >
               Copy TSX
