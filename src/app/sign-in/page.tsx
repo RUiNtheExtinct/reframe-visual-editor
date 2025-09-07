@@ -3,10 +3,10 @@
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Github } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 export default function SignInPage() {
   return (
@@ -18,7 +18,14 @@ export default function SignInPage() {
 
 function SignInContent() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams?.get("callbackUrl") || "/";
+  const rawCallback = searchParams?.get("callbackUrl") || "/";
+  const callbackUrl = useMemo(() => {
+    if (!rawCallback) return "/";
+    if (rawCallback.startsWith("/sign-in") || rawCallback.startsWith("/sign-up")) return "/";
+    return rawCallback;
+  }, [rawCallback]);
+  const router = useRouter();
+  const { status } = useSession();
   const [emailOrUsername, setEmailOrUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +41,12 @@ function SignInContent() {
     });
     if (res?.error) setError(res.error);
   };
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace(callbackUrl || "/");
+    }
+  }, [status, callbackUrl, router]);
 
   return (
     <div className="max-w-6xl mx-auto px-6 sm:px-12 py-8">

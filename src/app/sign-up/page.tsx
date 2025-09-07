@@ -3,10 +3,10 @@
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Github } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 export default function SignUpPage() {
   return (
@@ -18,7 +18,14 @@ export default function SignUpPage() {
 
 function SignUpContent() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams?.get("callbackUrl") || "/";
+  const rawCallback = searchParams?.get("callbackUrl") || "/";
+  const callbackUrl = useMemo(() => {
+    if (!rawCallback) return "/";
+    if (rawCallback.startsWith("/sign-in") || rawCallback.startsWith("/sign-up")) return "/";
+    return rawCallback;
+  }, [rawCallback]);
+  const router = useRouter();
+  const { status } = useSession();
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [name, setName] = useState("");
@@ -50,6 +57,12 @@ function SignUpContent() {
       setError(e?.message || "Sign up failed");
     }
   };
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace(callbackUrl || "/");
+    }
+  }, [status, callbackUrl, router]);
 
   return (
     <div className="max-w-6xl mx-auto px-6 sm:px-12 py-8">
