@@ -1345,7 +1345,10 @@ export default function SandboxEditor({
               <Button
                 variant="outline"
                 onClick={() => {
-                  const callbackUrl = typeof window !== "undefined" ? window.location.href : "/";
+                  const callbackUrl =
+                    typeof window !== "undefined"
+                      ? `${window.location.pathname}${window.location.search}`
+                      : "/";
                   router.push(`/sign-in?callbackUrl=${encodeURIComponent(callbackUrl)}`);
                 }}
                 className="cursor-pointer"
@@ -1354,7 +1357,10 @@ export default function SandboxEditor({
               </Button>
               <Button
                 onClick={() => {
-                  const callbackUrl = typeof window !== "undefined" ? window.location.href : "/";
+                  const callbackUrl =
+                    typeof window !== "undefined"
+                      ? `${window.location.pathname}${window.location.search}`
+                      : "/";
                   router.push(`/sign-up?callbackUrl=${encodeURIComponent(callbackUrl)}`);
                 }}
                 className="cursor-pointer"

@@ -45,7 +45,7 @@ async function generateUsernameFromEmail(
   let candidate = base;
   let counter = 0;
   // Ensure uniqueness
-   
+
   while (true) {
     const exists = await findUserByUsername(candidate);
     if (!exists) return candidate;
@@ -110,6 +110,16 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      try {
+        // Allow only same-origin redirects; convert relative to absolute
+        if (url.startsWith(baseUrl)) return url;
+        if (url.startsWith("/")) return `${baseUrl}${url}`;
+        return baseUrl;
+      } catch {
+        return baseUrl;
+      }
+    },
     async signIn({ user, account, profile }) {
       // Ensure our DB has a matching user for OAuth logins
       if (account && account.provider !== "credentials") {

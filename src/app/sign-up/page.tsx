@@ -6,9 +6,17 @@ import { Github } from "lucide-react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 
 export default function SignUpPage() {
+  return (
+    <Suspense fallback={<div className="max-w-6xl mx-auto px-6 sm:px-12 py-8" />}>
+      <SignUpContent />
+    </Suspense>
+  );
+}
+
+function SignUpContent() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams?.get("callbackUrl") || "/";
   const [email, setEmail] = useState("");
