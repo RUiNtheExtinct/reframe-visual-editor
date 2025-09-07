@@ -1,49 +1,31 @@
 /* eslint-disable  @typescript-eslint/no-explicit-any */
 "use client";
 
-import CodeEditor from "@/components/CodeEditor";
-import PreviewSurface from "@/components/PreviewSurface";
-import PreviewToolbar from "@/components/PreviewToolbar";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FONT_OPTIONS } from "@/constants";
 import { updateUpdateComponentMutation } from "@/lib/api/component/component.hook";
 import { api } from "@/lib/api/component/component.service";
 import { parseJsxToTree } from "@/lib/serializer";
 import { useUserStore } from "@/stores";
 import { useDraftStore } from "@/stores/draft.store";
-import clsx from "clsx";
-import { Copy, Redo2, Trash2, Undo2 } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { twMerge } from "tailwind-merge";
-import { ColorInputRow, GradientControls, ensureColor } from "./sandbox/Controls";
-import { BoxOverlay, ResizeOverlay } from "./sandbox/Overlays";
+import { AuthPrompt } from "./auth-prompt";
 import { useCompiledComponent } from "./sandbox/compile";
 import { DEFAULT_SNIPPET } from "./sandbox/defaults";
+import { DividerHandle } from "./sandbox/divider-handle";
 import type { Overrides } from "./sandbox/overrides";
 import {
   PIXEL_STYLES,
   buildTsxWithStyleOverrides,
   extractHistory,
   extractOverrides,
-  extractRotationDeg,
   injectHistory,
   injectOverrides,
-  renderOverridesCss,
   stripReframeMetadata,
 } from "./sandbox/overrides";
-import { buildUniqueSelector } from "./sandbox/selectors";
+import SandboxInspector from "./sandbox/SandboxInspector";
+import SandboxPreview from "./sandbox/SandboxPreview";
 
 type SandboxEditorProps = {
   id: string;
@@ -79,7 +61,6 @@ export default function SandboxEditor({
 
   // Preview + selection
   const shadowRootRef = useRef<ShadowRoot | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const [selectedSelector, setSelectedSelector] = useState<string | null>(null);
   const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
   const [selectedRect, setSelectedRect] = useState<DOMRect | null>(null);
@@ -87,7 +68,6 @@ export default function SandboxEditor({
   const overridesRef = useRef<Overrides>({});
   const [history, setHistory] = useState<Overrides[]>([]);
   const [future, setFuture] = useState<Overrides[]>([]);
-  const dragStartMarginsRef = useRef<{ marginLeft: number; marginTop: number } | null>(null);
   const splitRef = useRef<HTMLDivElement | null>(null);
   const [leftWidth, setLeftWidth] = useState<number>(0);
   const [isDraggingSplit, setIsDraggingSplit] = useState<boolean>(false);
@@ -434,48 +414,7 @@ export default function SandboxEditor({
     } catch {}
   }, [overridesRevision, previewKey, activeTab]);
 
-  // Hover/selection handlers inside shadow root (re-bind on preview remount or tab change)
-  useEffect(() => {
-    const root = shadowRootRef.current;
-    if (!root || activeTab !== "ui") return;
-    if (!selectionEnabled) {
-      setHoverRect(null);
-      setSelectedRect(null);
-      setSelectedSelector(null);
-      return;
-    }
-    const onMove = (e: Event) => {
-      const path = (e as any).composedPath?.() as any[] | undefined;
-      const target = path && path[0] ? (path[0] as HTMLElement) : undefined;
-      if (!target || !(target instanceof HTMLElement)) {
-        setHoverRect(null);
-        return;
-      }
-      const rect = target.getBoundingClientRect();
-      setHoverRect(rect);
-    };
-    const onLeave = () => setHoverRect(null);
-    const onClick = (e: Event) => {
-      const path = (e as any).composedPath?.() as any[] | undefined;
-      const target = path && path[0] ? (path[0] as HTMLElement) : undefined;
-      if (!target || !(target instanceof HTMLElement)) return;
-      try {
-        (e as any).preventDefault?.();
-        (e as any).stopPropagation?.();
-      } catch {}
-      const selector = buildUniqueSelector(target, root as any);
-      setSelectedSelector(selector);
-      setSelectedRect(target.getBoundingClientRect());
-    };
-    root.addEventListener("mousemove", onMove);
-    root.addEventListener("mouseleave", onLeave);
-    root.addEventListener("click", onClick);
-    return () => {
-      root.removeEventListener("mousemove", onMove);
-      root.removeEventListener("mouseleave", onLeave);
-      root.removeEventListener("click", onClick);
-    };
-  }, [previewRevision, previewKey, activeTab, selectionEnabled]);
+  // Hover/selection handlers moved into SandboxPreview
 
   // Clean selection and shadow root reference when leaving UI tab
   useEffect(() => {
@@ -574,818 +513,84 @@ export default function SandboxEditor({
   }, [activeTab, undo, redo, performSave]);
 
   return (
-    <div ref={splitRef} className="items-start gap-4 xl:flex">
-      <section
-        className="space-y-3"
-        style={{
-          width: isDesktop ? leftWidth : undefined,
-          flex: isDesktop ? "0 0 auto" : undefined,
+    <div ref={splitRef} className="items-start flex flex-col gap-4 xl:flex-row">
+      <SandboxPreview
+        isDesktop={isDesktop}
+        leftWidth={leftWidth}
+        previewDevice={previewDevice}
+        onPreviewDeviceChange={(v) => setPreviewDevice(v)}
+        customPreviewWidth={customPreviewWidth}
+        customPreviewHeight={customPreviewHeight}
+        onChangeCustomWidth={(n) => setCustomPreviewWidth(n)}
+        onChangeCustomHeight={(n) => setCustomPreviewHeight(n)}
+        selectionEnabled={selectionEnabled}
+        onToggleSelection={() => setSelectionEnabled((v) => !v)}
+        isSplitLocked={isSplitLocked}
+        onToggleSplitLock={() => setIsSplitLocked((v) => !v)}
+        onResetLayout={handleResetSplit}
+        showPreviewFrame={showPreviewFrame}
+        onTogglePreviewFrame={() => setShowPreviewFrame((v) => !v)}
+        activeTab={activeTab}
+        onChangeTab={(t) => setActiveTab(t)}
+        copyButtonText="Copy TSX"
+        onClickCopy={async () => {
+          const cleaned = stripReframeMetadata(code);
+          const hasOverrides = Boolean(
+            overridesRef.current && Object.keys(overridesRef.current).length
+          );
+          const withOverrides = hasOverrides
+            ? buildTsxWithStyleOverrides(cleaned, overridesRef.current, name)
+            : null;
+          const toCopy = withOverrides || cleaned;
+          await navigator.clipboard.writeText(toCopy);
+          toast.success(withOverrides ? "Copied TSX with overrides" : "Copied TSX");
         }}
-      >
-        <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex items-center gap-2 px-1">
-            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-200 ring-1 ring-red-800/60">
-              Sandbox Preview
-            </span>
-            <div className="inline-flex items-center gap-2 rounded-md border bg-card px-2 py-1">
-              <span
-                className={`h-2 w-2 rounded-full ${status.startsWith("Saved") ? "bg-green-500" : status.includes("fail") ? "bg-red-500" : "bg-red-400"}`}
-              />
-              <span className="text-xs text-foreground/80">{status}</span>
-            </div>
-          </div>
+        onClickSave={() => performSave({ manual: true })}
+        status={status}
+        code={code}
+        onChangeCode={setCode}
+        fileName={`${(name || "Component").replace(/\s+/g, "")}\.tsx`}
+        onSaveCode={() => performSave({ manual: true })}
+        getPreviewSize={getPreviewSize}
+        shadowRootRef={shadowRootRef}
+        selectedSelector={selectedSelector}
+        setSelectedSelector={setSelectedSelector}
+        hoverRect={hoverRect}
+        setHoverRect={setHoverRect}
+        selectedRect={selectedRect}
+        setSelectedRect={setSelectedRect}
+        overridesRef={overridesRef}
+        overridesRevision={overridesRevision}
+        setOverridesRevision={setOverridesRevision}
+        previewRevision={previewRevision}
+        setPreviewRevision={setPreviewRevision}
+        previewKey={previewKey}
+        history={history}
+        future={future}
+        undo={undo}
+        redo={redo}
+        pushHistory={pushHistory}
+        applyStyleChange={applyStyleChange}
+        Component={Component}
+        compileError={compileError}
+      />
 
-          <div className="w-full xl:w-auto flex flex-wrap items-center gap-2 justify-start xl:justify-end">
-            <PreviewToolbar
-              previewDevice={previewDevice}
-              onPreviewDeviceChange={(v) => setPreviewDevice(v)}
-              customPreviewWidth={customPreviewWidth}
-              customPreviewHeight={customPreviewHeight}
-              onChangeCustomWidth={(n) => setCustomPreviewWidth(n)}
-              onChangeCustomHeight={(n) => setCustomPreviewHeight(n)}
-              selectionEnabled={selectionEnabled}
-              onToggleSelection={() => setSelectionEnabled((v) => !v)}
-              isSplitLocked={isSplitLocked}
-              onToggleSplitLock={() => setIsSplitLocked((v) => !v)}
-              onResetLayout={handleResetSplit}
-              showPreviewFrame={showPreviewFrame}
-              onTogglePreviewFrame={() => setShowPreviewFrame((v) => !v)}
-              activeTab={activeTab}
-              onChangeTab={(t) => setActiveTab(t)}
-              copyButtonText="Copy TSX"
-              onClickCopy={async () => {
-                const cleaned = stripReframeMetadata(code);
-                const hasOverrides = Boolean(
-                  overridesRef.current && Object.keys(overridesRef.current).length
-                );
-                const withOverrides = hasOverrides
-                  ? buildTsxWithStyleOverrides(cleaned, overridesRef.current, name)
-                  : null;
-                const toCopy = withOverrides || cleaned;
-                await navigator.clipboard.writeText(toCopy);
-                toast.success(withOverrides ? "Copied TSX with overrides" : "Copied TSX");
-              }}
-              onClickSave={() => performSave({ manual: true })}
-            />
-          </div>
-        </div>
-        {activeTab === "code" && (
-          <div className="rounded-xl border overflow-hidden">
-            <CodeEditor
-              value={code}
-              onChange={setCode}
-              fileName={`${(name || "Component").replace(/\s+/g, "")}.tsx`}
-              onSave={() => performSave({ manual: true })}
-            />
-          </div>
-        )}
-        {activeTab === "ui" && (
-          <div className="rounded-xl border bg-card">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-red-900/40">
-              <h3 className="text-sm font-semibold text-red-600 dark:text-red-200">Live Sandbox</h3>
-              {compileError && (
-                <span className="text-xs text-red-600 dark:text-red-400">{compileError}</span>
-              )}
-            </div>
-            <div
-              ref={containerRef}
-              className={twMerge(
-                clsx(
-                  "relative",
-                  showPreviewFrame &&
-                    "rounded-lg ring-2 ring-red-900/40 dark:ring-red-700/40 bg-background"
-                )
-              )}
-              style={{
-                width: Math.min(getPreviewSize().width, (leftWidth || 1200) - 24),
-                marginLeft: "auto",
-                marginRight: "auto",
-                ...(previewDevice === "custom" && getPreviewSize().height
-                  ? { height: getPreviewSize().height }
-                  : {}),
-              }}
-            >
-              <PreviewSurface onShadowRootReady={(r) => (shadowRootRef.current = r)}>
-                <div
-                  key={previewKey}
-                  className="p-6 min-h-[480px] sm:min-h-[600px] xl:min-h-[730px]"
-                >
-                  {/* Inject overrides style tag */}
-                  <style suppressHydrationWarning>{renderOverridesCss(overridesRef.current)}</style>
-                  {Component ? (
-                    <SandboxMount>
-                      <Component />
-                    </SandboxMount>
-                  ) : (
-                    <FallbackPreview />
-                  )}
-                </div>
-              </PreviewSurface>
-              {/* Hover overlay */}
-              {hoverRect && (
-                <BoxOverlay
-                  rect={hoverRect}
-                  container={containerRef.current}
-                  colorClass="ring-red-500/60"
-                />
-              )}
-              {/* Selected overlay with resize handles */}
-              {selectedRect && selectedSelector && (
-                <ResizeOverlay
-                  rect={selectedRect}
-                  container={containerRef.current}
-                  colorClass="ring-green-500/70"
-                  onResizeStart={() => {
-                    pushHistory();
-                  }}
-                  onResize={(nextW, nextH) => {
-                    const root = shadowRootRef.current;
-                    if (!root || !selectedSelector) return;
-                    const el = root.querySelector(selectedSelector) as HTMLElement | null;
-                    if (!el) return;
-                    try {
-                      if (typeof nextW === "number") {
-                        (el.style as any).width = `${Math.max(1, Math.round(nextW))}px`;
-                      }
-                      if (typeof nextH === "number") {
-                        (el.style as any).height = `${Math.max(1, Math.round(nextH))}px`;
-                      }
-                      setSelectedRect(el.getBoundingClientRect());
-                    } catch {}
-                  }}
-                  onResizeEnd={(finalW, finalH) => {
-                    const root = shadowRootRef.current;
-                    if (!root || !selectedSelector) return;
-                    const el = root.querySelector(selectedSelector) as HTMLElement | null;
-                    if (!el) return;
-                    const prev = overridesRef.current[selectedSelector]?.style || {};
-                    const nextStyle: any = { ...prev };
-                    if (typeof finalW === "number")
-                      nextStyle.width = Math.max(1, Math.round(finalW));
-                    if (typeof finalH === "number")
-                      nextStyle.height = Math.max(1, Math.round(finalH));
-                    overridesRef.current = {
-                      ...overridesRef.current,
-                      [selectedSelector]: {
-                        ...(overridesRef.current[selectedSelector] || {}),
-                        style: nextStyle,
-                      },
-                    };
-                    // Trigger autosave via overrides only; avoid preview remount
-                    setOverridesRevision((r) => r + 1);
-                  }}
-                  onDragStart={() => {
-                    const root = shadowRootRef.current;
-                    if (!root || !selectedSelector) return;
-                    const el = root.querySelector(selectedSelector) as HTMLElement | null;
-                    if (!el) return;
-                    pushHistory();
-                    const cs = getComputedStyle(el);
-                    const ml = parseInt(cs.marginLeft || "0", 10) || 0;
-                    const mt = parseInt(cs.marginTop || "0", 10) || 0;
-                    dragStartMarginsRef.current = { marginLeft: ml, marginTop: mt };
-                  }}
-                  onDrag={(dx, dy) => {
-                    const root = shadowRootRef.current;
-                    if (!root || !selectedSelector) return;
-                    const el = root.querySelector(selectedSelector) as HTMLElement | null;
-                    if (!el) return;
-                    const base = dragStartMarginsRef.current || { marginLeft: 0, marginTop: 0 };
-                    const ml = Math.round(base.marginLeft + dx);
-                    const mt = Math.round(base.marginTop + dy);
-                    (el.style as any).marginLeft = `${ml}px`;
-                    (el.style as any).marginTop = `${mt}px`;
-                    setSelectedRect(el.getBoundingClientRect());
-                  }}
-                  onDragEnd={(dx, dy) => {
-                    if (!selectedSelector) return;
-                    const base = dragStartMarginsRef.current || { marginLeft: 0, marginTop: 0 };
-                    const ml = Math.round(base.marginLeft + (dx || 0));
-                    const mt = Math.round(base.marginTop + (dy || 0));
-                    const prev = overridesRef.current[selectedSelector]?.style || {};
-                    overridesRef.current = {
-                      ...overridesRef.current,
-                      [selectedSelector]: {
-                        ...(overridesRef.current[selectedSelector] || {}),
-                        style: { ...prev, marginLeft: ml, marginTop: mt },
-                      },
-                    };
-                    setOverridesRevision((r) => r + 1);
-                    dragStartMarginsRef.current = null;
-                  }}
-                  onRotateStart={() => {
-                    // history already captured on resize/move; no-op here
-                  }}
-                  onRotate={(ang) => {
-                    const root = shadowRootRef.current;
-                    if (!root || !selectedSelector) return;
-                    const el = root.querySelector(selectedSelector) as HTMLElement | null;
-                    if (!el) return;
-                    (el.style as any).transform = `rotate(${Math.round(ang)}deg)`;
-                    setSelectedRect(el.getBoundingClientRect());
-                  }}
-                  onRotateEnd={(ang) => {
-                    if (!selectedSelector) return;
-                    const prev = overridesRef.current[selectedSelector]?.style || {};
-                    overridesRef.current = {
-                      ...overridesRef.current,
-                      [selectedSelector]: {
-                        ...(overridesRef.current[selectedSelector] || {}),
-                        style: { ...prev, transform: `rotate(${Math.round(ang)}deg)` },
-                      },
-                    };
-                    setOverridesRevision((r) => r + 1);
-                  }}
-                  requestFreshRect={() => {
-                    const root = shadowRootRef.current;
-                    if (!root || !selectedSelector) return null;
-                    const el = root.querySelector(selectedSelector) as HTMLElement | null;
-                    return el ? el.getBoundingClientRect() : null;
-                  }}
-                />
-              )}
-            </div>
-            {/* In-preview actions */}
-            {selectedSelector && (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between flex-wrap border-t px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={undo}
-                    disabled={!history.length}
-                    className="inline-flex items-center gap-1"
-                  >
-                    <Undo2 className="h-4 w-4" /> Undo
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={redo}
-                    disabled={!future.length}
-                    className="inline-flex items-center gap-1"
-                  >
-                    <Redo2 className="h-4 w-4" /> Redo
-                  </Button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    className="inline-flex items-center gap-1"
-                    onClick={() => {
-                      const el = shadowRootRef.current?.querySelector(
-                        selectedSelector
-                      ) as HTMLElement | null;
-                      if (!el) return;
-                      try {
-                        const html = el.outerHTML || "";
-                        navigator.clipboard.writeText(html);
-                        toast.success("Copied node HTML");
-                      } catch {
-                        toast.error("Copy failed");
-                      }
-                    }}
-                  >
-                    <Copy className="h-4 w-4" /> Copy node
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="inline-flex items-center gap-1"
-                    disabled={true}
-                    onClick={() => {
-                      const root = shadowRootRef.current;
-                      if (!root || !selectedSelector) return;
-                      const el = root.querySelector(selectedSelector) as HTMLElement | null;
-                      if (!el || !el.parentElement) return;
-                      try {
-                        pushHistory();
-                        const clone = el.cloneNode(true) as HTMLElement;
-                        el.parentElement.insertBefore(clone, el.nextSibling);
-                        const selector = buildUniqueSelector(clone, root as any);
-                        const src = overridesRef.current[selectedSelector];
-                        if (src) {
-                          overridesRef.current = {
-                            ...overridesRef.current,
-                            [selector]: JSON.parse(JSON.stringify(src)),
-                          };
-                        }
-                        setSelectedSelector(selector);
-                        setSelectedRect(clone.getBoundingClientRect());
-                        setPreviewRevision((r) => r + 1);
-                        setOverridesRevision((r) => r + 1);
-                        toast.success("Duplicated node");
-                      } catch {
-                        toast.error("Duplicate failed");
-                      }
-                    }}
-                  >
-                    <Copy className="h-4 w-4" /> Duplicate
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    className="inline-flex items-center gap-1"
-                    onClick={() => {
-                      const el = shadowRootRef.current?.querySelector(
-                        selectedSelector
-                      ) as HTMLElement | null;
-                      if (el) {
-                        try {
-                          pushHistory();
-                          el.style.display = "none";
-                        } catch {}
-                      }
-                      applyStyleChange("display", "none");
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" /> Delete
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
       {/* Split handle (desktop only) */}
-      <div
-        className="hidden xl:block select-none"
-        onPointerDown={onSplitPointerDown}
-        style={{
-          width: 10,
-          cursor: isSplitLocked ? "not-allowed" : "col-resize",
-          flex: "0 0 auto",
-          alignSelf: "stretch",
-          background: "transparent",
-          borderRadius: 6,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-        aria-label="Resize preview/inspector"
-      >
-        <div
-          style={{
-            width: 10,
-            height: 64,
-            borderRadius: 8,
-            background: "rgba(0,0,0,0.08)",
-            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.06)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-            }}
-          >
-            <div
-              style={{
-                width: 4,
-                height: 4,
-                borderRadius: 4,
-                background: isSplitLocked ? "rgba(120,120,120,0.5)" : "rgba(180,180,180,0.9)",
-              }}
-            />
-            <div
-              style={{
-                width: 4,
-                height: 4,
-                borderRadius: 4,
-                background: isSplitLocked ? "rgba(120,120,120,0.5)" : "rgba(180,180,180,0.9)",
-              }}
-            />
-            <div
-              style={{
-                width: 4,
-                height: 4,
-                borderRadius: 4,
-                background: isSplitLocked ? "rgba(120,120,120,0.5)" : "rgba(180,180,180,0.9)",
-              }}
-            />
-            <div
-              style={{
-                width: 4,
-                height: 4,
-                borderRadius: 4,
-                background: isSplitLocked ? "rgba(120,120,120,0.5)" : "rgba(180,180,180,0.9)",
-              }}
-            />
-            <div
-              style={{
-                width: 4,
-                height: 4,
-                borderRadius: 4,
-                background: isSplitLocked ? "rgba(120,120,120,0.5)" : "rgba(180,180,180,0.9)",
-              }}
-            />
-          </div>
-        </div>
-      </div>
-      <section className="space-y-4" style={{ flex: "1 1 0%" }}>
-        <div className="rounded-xl border p-4 bg-card">
-          <div className="flex flex-row items-center justify-between mb-3">
-            <h4 className="text-md font-semibold text-red-600 dark:text-red-300">Meta</h4>
-            <div className="flex flex-row items-center gap-3">
-              <Link
-                className="text-sm underline decoration-dotted text-red-700 dark:text-red-200"
-                href="/components"
-              >
-                Components
-              </Link>
-              <Link className="text-sm text-red-600 dark:text-red-400 hover:underline" href="/">
-                New import
-              </Link>
-            </div>
-          </div>
-          <div className="space-y-3">
-            <label className="block text-xs text-foreground/70">Name</label>
-            <input
-              className="w-full rounded-md border px-3 py-2 bg-background text-sm"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <label className="block text-xs text-foreground/70">Description</label>
-            <input
-              className="w-full rounded-md border px-3 py-2 bg-background text-sm"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="rounded-xl border p-4 bg-card">
-          <h4 className="text-md font-semibold mb-3 text-red-600 dark:text-red-300">Inspector</h4>
-          {selectedSelector ? (
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs text-foreground/70 mb-1">Selected</label>
-                <input
-                  className="w-full rounded-md border bg-background px-3 py-2 text-xs text-foreground/70"
-                  value={selectedSelector}
-                  readOnly
-                />
-              </div>
-              {/* Inspector Tabs: Formatting, Borders, Gradients, Layout */}
-              <Tabs defaultValue="formatting">
-                <TabsList className="w-full grid grid-cols-4">
-                  <TabsTrigger value="formatting">Formatting</TabsTrigger>
-                  <TabsTrigger value="borders">Borders</TabsTrigger>
-                  <TabsTrigger value="gradients">Gradients</TabsTrigger>
-                  <TabsTrigger value="layout">Layout</TabsTrigger>
-                </TabsList>
-                <TabsContent value="formatting">
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs text-foreground/70 mb-1">Text</label>
-                      <input
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                        value={selectedText}
-                        onChange={(e) => applyTextChange(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="col-span-2 grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs text-foreground/70 mb-1">
-                            Text Color
-                          </label>
-                          <ColorInputRow
-                            value={ensureColor(selectedStyle["color"] as string | undefined)}
-                            onChange={(c) => applyStyleChange("color", c)}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-foreground/70 mb-1">
-                            Background Color
-                          </label>
-                          <ColorInputRow
-                            value={ensureColor(
-                              selectedStyle["backgroundColor"] as string | undefined
-                            )}
-                            onChange={(c) => applyStyleChange("backgroundColor", c)}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-foreground/70 mb-1">
-                          Font Size (px)
-                        </label>
-                        <input
-                          type="number"
-                          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                          value={Number(selectedStyle["fontSize"] ?? 16)}
-                          onChange={(e) =>
-                            applyStyleChange("fontSize", Number(e.target.value || 0))
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-foreground/70 mb-1">
-                          Padding (px)
-                        </label>
-                        <input
-                          type="number"
-                          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                          value={Number((selectedStyle as any)["padding"] ?? 0)}
-                          onChange={(e) => applyStyleChange("padding", Number(e.target.value || 0))}
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs text-foreground/70 mb-1">Font Family</label>
-                        <Select
-                          value={(selectedStyle["fontFamily"] as string) || "default"}
-                          onValueChange={(val) =>
-                            applyStyleChange("fontFamily", val === "default" ? "" : val)
-                          }
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Choose font" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {FONT_OPTIONS.map((opt) => (
-                              <SelectItem
-                                key={opt.label}
-                                value={opt.value === "default" ? "default" : opt.value}
-                              >
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="flex items-end gap-2">
-                        <button
-                          className={`rounded-md w-fit border px-4 py-2 text-sm ${selectedStyle["fontStyle"] === "italic" ? "bg-foreground text-background" : ""}`}
-                          onClick={() =>
-                            applyStyleChange(
-                              "fontStyle",
-                              selectedStyle["fontStyle"] === "italic" ? "normal" : "italic"
-                            )
-                          }
-                        >
-                          Italic
-                        </button>
-                        <div className="w-full">
-                          <label className="block text-xs text-foreground/70 mb-1">Weight</label>
-                          <Select
-                            value={String(selectedStyle["fontWeight"] ?? 400)}
-                            onValueChange={(val) => applyStyleChange("fontWeight", Number(val))}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {[100, 200, 300, 400, 500, 600, 700, 800, 900].map((w) => (
-                                <SelectItem key={w} value={String(w)}>
-                                  {w}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </TabsContent>
-                <TabsContent value="borders">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-foreground/70 mb-1">Border Style</label>
-                      <Select
-                        value={(selectedStyle["borderStyle"] as string) || "none"}
-                        onValueChange={(val) =>
-                          applyStyleChange("borderStyle", val === "none" ? "" : val)
-                        }
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {["none", "solid", "dashed", "dotted", "double"].map((s) => (
-                            <SelectItem key={s} value={s}>
-                              {s}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-foreground/70 mb-1">
-                        Border Width (px)
-                      </label>
-                      <input
-                        type="number"
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                        value={Number((selectedStyle as any)["borderWidth"] ?? 0)}
-                        onChange={(e) =>
-                          applyStyleChange("borderWidth", Number(e.target.value || 0))
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-foreground/70 mb-1">
-                        Border Radius (px)
-                      </label>
-                      <input
-                        type="number"
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                        value={Number((selectedStyle as any)["borderRadius"] ?? 0)}
-                        onChange={(e) =>
-                          applyStyleChange("borderRadius", Number(e.target.value || 0))
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-foreground/70 mb-1">Border Color</label>
-                      <ColorInputRow
-                        value={ensureColor(
-                          (selectedStyle as any)["borderColor"] as string | undefined
-                        )}
-                        onChange={(c) => applyStyleChange("borderColor", c)}
-                      />
-                    </div>
-                  </div>
-                </TabsContent>
-                <TabsContent value="gradients">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="text-xs font-semibold text-foreground/70">Text Gradient</div>
-                      <GradientControls
-                        current={(selectedStyle as any)["backgroundImage"] as string | undefined}
-                        onChange={(g) => {
-                          const bi = (selectedStyle as any)["backgroundImage"] as
-                            | string
-                            | undefined;
-                          const parts = (bi && bi.match(/linear-gradient\([^\)]*\)/g)) || [];
-                          const bg = parts.length >= 2 ? parts[0] : undefined;
-                          const layers: string[] = [];
-                          if (bg) layers.push(bg);
-                          if (g) layers.push(g);
-                          applyStyleChange("backgroundImage", layers.join(", "));
-                          applyStyleChange("WebkitBackgroundClip", g ? "text" : "");
-                          applyStyleChange("WebkitTextFillColor", g ? "transparent" : "");
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="text-xs font-semibold text-foreground/70">
-                        Background Gradient
-                      </div>
-                      <GradientControls
-                        current={(selectedStyle as any)["backgroundImage"] as string | undefined}
-                        onChange={(g) => {
-                          const bi = (selectedStyle as any)["backgroundImage"] as
-                            | string
-                            | undefined;
-                          const parts = (bi && bi.match(/linear-gradient\([^\)]*\)/g)) || [];
-                          const text = parts.length >= 2 ? parts[1] : undefined;
-                          const layers: string[] = [];
-                          if (g) layers.push(g);
-                          if (text) layers.push(text);
-                          applyStyleChange("backgroundImage", layers.join(", "));
-                          applyStyleChange("WebkitBackgroundClip", text ? "text" : "");
-                          applyStyleChange("WebkitTextFillColor", text ? "transparent" : "");
-                          if (g) applyStyleChange("backgroundColor", "");
-                        }}
-                      />
-                    </div>
-                  </div>
-                </TabsContent>
-                <TabsContent value="layout">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-foreground/70 mb-1">Width (px)</label>
-                      <input
-                        type="number"
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                        value={Number((selectedStyle as any)["width"] ?? 0)}
-                        onChange={(e) => applyStyleChange("width", Number(e.target.value || 0))}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-foreground/70 mb-1">Height (px)</label>
-                      <input
-                        type="number"
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                        value={Number((selectedStyle as any)["height"] ?? 0)}
-                        onChange={(e) => applyStyleChange("height", Number(e.target.value || 0))}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-foreground/70 mb-1">
-                        Margin Left (px)
-                      </label>
-                      <input
-                        type="number"
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                        value={Number((selectedStyle as any)["marginLeft"] ?? 0)}
-                        onChange={(e) =>
-                          applyStyleChange("marginLeft", Number(e.target.value || 0))
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-foreground/70 mb-1">
-                        Margin Top (px)
-                      </label>
-                      <input
-                        type="number"
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                        value={Number((selectedStyle as any)["marginTop"] ?? 0)}
-                        onChange={(e) => applyStyleChange("marginTop", Number(e.target.value || 0))}
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-xs text-foreground/70 mb-1">
-                        Rotation (deg)
-                      </label>
-                      <input
-                        type="number"
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                        value={extractRotationDeg(
-                          (selectedStyle as any)["transform"] as string | undefined
-                        )}
-                        onChange={(e) => {
-                          const deg = Math.round(Number(e.target.value || 0));
-                          applyStyleChange("transform", `rotate(${deg}deg)`);
-                        }}
-                      />
-                    </div>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-          ) : (
-            <p className="text-sm text-foreground/70">
-              Click any element in the preview to edit it.
-            </p>
-          )}
-        </div>
-      </section>
-      {showAuthPrompt && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-sm rounded-xl border bg-card p-5 shadow-lg">
-            <h2 className="text-lg font-semibold mb-1">Sign in to save</h2>
-            <p className="text-sm text-foreground/70 mb-4">
-              You need an account to save changes. Sign in or create one now.
-            </p>
-            <div className="flex items-center justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setShowAuthPrompt(false)}
-                className="cursor-pointer"
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const callbackUrl =
-                    typeof window !== "undefined"
-                      ? `${window.location.pathname}${window.location.search}`
-                      : "/";
-                  router.push(`/sign-in?callbackUrl=${encodeURIComponent(callbackUrl)}`);
-                }}
-                className="cursor-pointer"
-              >
-                Sign in
-              </Button>
-              <Button
-                onClick={() => {
-                  const callbackUrl =
-                    typeof window !== "undefined"
-                      ? `${window.location.pathname}${window.location.search}`
-                      : "/";
-                  router.push(`/sign-up?callbackUrl=${encodeURIComponent(callbackUrl)}`);
-                }}
-                className="cursor-pointer"
-              >
-                Create account
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+      <DividerHandle onSplitPointerDown={onSplitPointerDown} isSplitLocked={isSplitLocked} />
 
-function SandboxMount({ children }: { children: React.ReactNode }) {
-  return <div data-sandbox-root>{children}</div>;
-}
+      <SandboxInspector
+        name={name}
+        description={description}
+        setName={setName}
+        setDescription={setDescription}
+        selectedSelector={selectedSelector}
+        selectedText={selectedText}
+        selectedStyle={selectedStyle}
+        applyTextChange={applyTextChange}
+        applyStyleChange={applyStyleChange}
+      />
 
-function FallbackPreview() {
-  return (
-    <div className="p-4 text-sm text-red-300">
-      Paste a React component on the left to see it here.
+      <AuthPrompt showAuthPrompt={showAuthPrompt} setShowAuthPrompt={setShowAuthPrompt} />
     </div>
   );
 }

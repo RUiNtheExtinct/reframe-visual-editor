@@ -55,6 +55,9 @@ export type PreviewToolbarProps = {
   copyButtonText?: string;
   onClickCopy: () => void | Promise<void>;
   onClickSave?: () => void | Promise<void>;
+
+  // Optional: status text to show chips (Sandbox only)
+  status: string;
 };
 
 export default function PreviewToolbar(props: PreviewToolbarProps) {
@@ -78,200 +81,222 @@ export default function PreviewToolbar(props: PreviewToolbarProps) {
     copyButtonText = "Copy TSX",
     onClickCopy,
     onClickSave,
+    status,
   } = props;
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-2 w-full xl:w-auto", className)}>
-      <div className="hidden xl:flex items-center gap-2">
-        <Select
-          value={previewDevice}
-          onValueChange={(v) => onPreviewDeviceChange(v as PreviewDevice)}
-        >
-          <SelectTrigger className="h-8 w-[140px]">
-            <SelectValue placeholder="Preview device" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="desktop">
-              <div className="flex items-center gap-2">
-                <Monitor className="size-4" /> <span>Desktop</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="tablet">
-              <div className="flex items-center gap-2">
-                <Tablet className="size-4" /> <span>Tablet</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="mobile">
-              <div className="flex items-center gap-2">
-                <Smartphone className="size-4" /> <span>Mobile</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="custom">
-              <div className="flex items-center gap-2">
-                <SquareDashed className="size-4" /> <span>Custom…</span>
-              </div>
-            </SelectItem>
-          </SelectContent>
-        </Select>
-        {previewDevice === "custom" && (
-          <div className="flex items-center gap-1">
-            <input
-              type="number"
-              className="w-20 h-8 rounded-md border bg-background px-2 text-xs"
-              value={customPreviewWidth}
-              onChange={(e) => onChangeCustomWidth(Math.max(240, Number(e.target.value || 0)))}
-              placeholder="Width"
-              aria-label="Custom width"
-            />
-            <span className="text-xs text-foreground/60">×</span>
-            <input
-              type="number"
-              className="w-20 h-8 rounded-md border bg-background px-2 text-xs"
-              value={customPreviewHeight}
-              onChange={(e) => onChangeCustomHeight(Math.max(320, Number(e.target.value || 0)))}
-              placeholder="Height"
-              aria-label="Custom height"
-            />
-          </div>
-        )}
-      </div>
-
-      <TooltipProvider delayDuration={1000}>
-        <div className="hidden xl:flex items-center gap-1">
-          {typeof showPreviewFrame === "boolean" && onTogglePreviewFrame && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  className={cn(
-                    "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center cursor-pointer",
-                    showPreviewFrame
-                      ? "bg-green-400 dark:bg-green-900 hover:bg-accent dark:hover:bg-accent"
-                      : "hover:bg-accent dark:hover:bg-accent"
-                  )}
-                  onClick={onTogglePreviewFrame}
-                  aria-label={showPreviewFrame ? "Hide preview frame" : "Show preview frame"}
-                >
-                  {showPreviewFrame ? (
-                    <CheckSquareIcon className="size-4 text-black dark:text-white" />
-                  ) : (
-                    <Square className="size-4 text-black dark:text-white" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {showPreviewFrame ? "Hide preview frame" : "Show preview frame"}
-              </TooltipContent>
-            </Tooltip>
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                className={cn(
-                  "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center cursor-pointer",
-                  selectionEnabled
-                    ? "bg-green-400 dark:bg-green-900 hover:bg-accent dark:hover:bg-accent"
-                    : "hover:bg-accent dark:hover:bg-accent"
-                )}
-                onClick={onToggleSelection}
-                aria-label={selectionEnabled ? "Disable selection" : "Enable selection"}
-              >
-                <Crosshair className="size-4 text-black dark:text-white" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {selectionEnabled ? "Disable selection" : "Enable selection"}
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                className={cn(
-                  "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center hover:bg-accent cursor-pointer",
-                  isSplitLocked
-                    ? "bg-green-400 dark:bg-green-900 hover:bg-accent dark:hover:bg-accent"
-                    : "hover:bg-accent dark:hover:bg-accent"
-                )}
-                onClick={onToggleSplitLock}
-                aria-label={isSplitLocked ? "Unlock layout" : "Lock layout"}
-              >
-                {isSplitLocked ? (
-                  <Lock className="size-4 text-black dark:text-white" />
-                ) : (
-                  <Unlock className="size-4 text-black dark:text-white" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{isSplitLocked ? "Unlock layout" : "Lock layout"}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                className={cn(
-                  "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center cursor-pointer",
-                  isSplitLocked
-                    ? "opacity-50 cursor-not-allowed"
-                    : "hover:bg-accent dark:hover:bg-accent"
-                )}
-                onClick={() => {
-                  if (!isSplitLocked) onResetLayout();
-                }}
-                aria-label={isSplitLocked ? "Unlock layout to reset" : "Reset Layout"}
-                disabled={isSplitLocked}
-              >
-                <RotateCcw className="size-4 text-black dark:text-white" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {isSplitLocked ? "Unlock layout to reset" : "Reset Layout"}
-            </TooltipContent>
-          </Tooltip>
+    <>
+      <section className="items-center gap-2 px-1 hidden xl:flex">
+        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-200 ring-1 ring-red-800/60">
+          Sandbox Preview
+        </span>
+        <div className="inline-flex items-center gap-2 rounded-md border bg-card px-2 py-1">
+          <span
+            className={`h-2 w-2 rounded-full ${status.startsWith("Saved") ? "bg-green-500" : status.includes("fail") ? "bg-red-500" : "bg-red-400"}`}
+          />
+          <span className="text-xs text-foreground/80">{status}</span>
         </div>
-      </TooltipProvider>
-
-      <div className="inline-flex items-center rounded-md border bg-card p-0.5 shrink-0">
-        <button
+      </section>
+      <section className="w-full xl:w-auto flex flex-wrap items-center gap-2 justify-start xl:justify-end">
+        <div
           className={cn(
-            "w-18 justify-center px-3 py-1.5 text-xs rounded-[6px] inline-flex items-center gap-1",
-            activeTab === "ui"
-              ? "bg-red-100 text-red-700 border border-red-300 dark:bg-red-900/30 dark:text-red-200 dark:border-red-800"
-              : "text-foreground/60"
+            "flex flex-wrap items-center gap-3 w-full xl:w-auto xl:flex-row flex-col",
+            className
           )}
-          onClick={() => onChangeTab("ui")}
         >
-          <Eye className="size-4" /> UI
-        </button>
-        <button
-          className={cn(
-            "w-18 justify-center px-3 py-1.5 text-xs rounded-[6px] inline-flex items-center gap-1 cursor-pointer",
-            activeTab === "code"
-              ? "bg-green-100 text-green-700 border border-green-300 dark:bg-green-900/30 dark:text-green-200 dark:border-green-800"
-              : "text-foreground/60"
-          )}
-          onClick={() => onChangeTab("code")}
-        >
-          <Code2 className="size-4" /> Code
-        </button>
-      </div>
+          <div className="hidden xl:flex items-center gap-2">
+            <Select
+              value={previewDevice}
+              onValueChange={(v) => onPreviewDeviceChange(v as PreviewDevice)}
+            >
+              <SelectTrigger className="h-8 w-[140px]">
+                <SelectValue placeholder="Preview device" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="desktop">
+                  <div className="flex items-center gap-2">
+                    <Monitor className="size-4" /> <span>Desktop</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="tablet">
+                  <div className="flex items-center gap-2">
+                    <Tablet className="size-4" /> <span>Tablet</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="mobile">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="size-4" /> <span>Mobile</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="custom">
+                  <div className="flex items-center gap-2">
+                    <SquareDashed className="size-4" /> <span>Custom…</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            {previewDevice === "custom" && (
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  className="w-20 h-8 rounded-md border bg-background px-2 text-xs"
+                  value={customPreviewWidth}
+                  onChange={(e) => onChangeCustomWidth(Math.max(240, Number(e.target.value || 0)))}
+                  placeholder="Width"
+                  aria-label="Custom width"
+                />
+                <span className="text-xs text-foreground/60">×</span>
+                <input
+                  type="number"
+                  className="w-20 h-8 rounded-md border bg-background px-2 text-xs"
+                  value={customPreviewHeight}
+                  onChange={(e) => onChangeCustomHeight(Math.max(320, Number(e.target.value || 0)))}
+                  placeholder="Height"
+                  aria-label="Custom height"
+                />
+              </div>
+            )}
+          </div>
 
-      <Button
-        variant="outline"
-        className="inline-flex items-center gap-1 cursor-pointer shrink-0"
-        onClick={onClickCopy}
-      >
-        {copyButtonText}
-      </Button>
+          <TooltipProvider delayDuration={1000}>
+            <div className="flex items-center gap-1">
+              {typeof showPreviewFrame === "boolean" && onTogglePreviewFrame && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      className={cn(
+                        "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center cursor-pointer",
+                        showPreviewFrame
+                          ? "bg-green-400 dark:bg-green-900 hover:bg-accent dark:hover:bg-accent"
+                          : "hover:bg-accent dark:hover:bg-accent"
+                      )}
+                      onClick={onTogglePreviewFrame}
+                      aria-label={showPreviewFrame ? "Hide preview frame" : "Show preview frame"}
+                    >
+                      {showPreviewFrame ? (
+                        <CheckSquareIcon className="size-4 text-black dark:text-white" />
+                      ) : (
+                        <Square className="size-4 text-black dark:text-white" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {showPreviewFrame ? "Hide preview frame" : "Show preview frame"}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    className={cn(
+                      "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center cursor-pointer",
+                      selectionEnabled
+                        ? "bg-green-400 dark:bg-green-900 hover:bg-accent dark:hover:bg-accent"
+                        : "hover:bg-accent dark:hover:bg-accent"
+                    )}
+                    onClick={onToggleSelection}
+                    aria-label={selectionEnabled ? "Disable selection" : "Enable selection"}
+                  >
+                    <Crosshair className="size-4 text-black dark:text-white" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {selectionEnabled ? "Disable selection" : "Enable selection"}
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    className={cn(
+                      "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center hover:bg-accent cursor-pointer",
+                      isSplitLocked
+                        ? "bg-green-400 dark:bg-green-900 hover:bg-accent dark:hover:bg-accent"
+                        : "hover:bg-accent dark:hover:bg-accent"
+                    )}
+                    onClick={onToggleSplitLock}
+                    aria-label={isSplitLocked ? "Unlock layout" : "Lock layout"}
+                  >
+                    {isSplitLocked ? (
+                      <Lock className="size-4 text-black dark:text-white" />
+                    ) : (
+                      <Unlock className="size-4 text-black dark:text-white" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{isSplitLocked ? "Unlock layout" : "Lock layout"}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    className={cn(
+                      "h-8 w-8 rounded-md border bg-card inline-flex items-center justify-center cursor-pointer",
+                      isSplitLocked
+                        ? "opacity-50 cursor-not-allowed"
+                        : "hover:bg-accent dark:hover:bg-accent"
+                    )}
+                    onClick={() => {
+                      if (!isSplitLocked) onResetLayout();
+                    }}
+                    aria-label={isSplitLocked ? "Unlock layout to reset" : "Reset Layout"}
+                    disabled={isSplitLocked}
+                  >
+                    <RotateCcw className="size-4 text-black dark:text-white" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isSplitLocked ? "Unlock layout to reset" : "Reset Layout"}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
 
-      <Button
-        className={cn(
-          "inline-flex items-center gap-1 cursor-pointer shrink-0",
-          "bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
-        )}
-        onClick={() => onClickSave && onClickSave()}
-        aria-label="Save Changes"
-        title="Save Changes"
-      >
-        Save Changes
-      </Button>
-    </div>
+          <div className="inline-flex items-center rounded-md border bg-card p-0.5 shrink-0">
+            <button
+              className={cn(
+                "w-18 justify-center px-3 py-1.5 text-xs rounded-[6px] inline-flex items-center gap-1",
+                activeTab === "ui"
+                  ? "bg-red-100 text-red-700 border border-red-300 dark:bg-red-900/30 dark:text-red-200 dark:border-red-800"
+                  : "text-foreground/60"
+              )}
+              onClick={() => onChangeTab("ui")}
+            >
+              <Eye className="size-4" /> UI
+            </button>
+            <button
+              className={cn(
+                "w-18 justify-center px-3 py-1.5 text-xs rounded-[6px] inline-flex items-center gap-1 cursor-pointer",
+                activeTab === "code"
+                  ? "bg-green-100 text-green-700 border border-green-300 dark:bg-green-900/30 dark:text-green-200 dark:border-green-800"
+                  : "text-foreground/60"
+              )}
+              onClick={() => onChangeTab("code")}
+            >
+              <Code2 className="size-4" /> Code
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              className="inline-flex items-center gap-1 cursor-pointer shrink-0"
+              onClick={onClickCopy}
+            >
+              {copyButtonText}
+            </Button>
+            <Button
+              className={cn(
+                "inline-flex items-center gap-1 cursor-pointer shrink-0",
+                "bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+              )}
+              onClick={() => onClickSave && onClickSave()}
+              aria-label="Save Changes"
+              title="Save Changes"
+            >
+              Save Changes
+            </Button>
+          </div>
+        </div>
+      </section>
+    </>
   );
 }
