@@ -255,6 +255,7 @@ export default function SandboxEditor({
   const pendingSaveKeyRef = useRef<string | null>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveInFlightRef = useRef<boolean>(false);
+  const forceCreateRef = useRef<boolean>(false);
 
   const computeSaveState = useCallback(() => {
     let sourceToSave = injectOverrides(code, overridesRef.current);
@@ -297,7 +298,7 @@ export default function SandboxEditor({
         tree = await parseJsxToTree(sourceToSave);
       } catch {}
       try {
-        if (id.startsWith("unsaved-")) {
+        if (id.startsWith("unsaved-") || forceCreateRef.current) {
           if (!user?.userId) {
             throw new Error("Please login to save your changes");
           }
@@ -311,6 +312,7 @@ export default function SandboxEditor({
           lastSavedAtRef.current = Date.now();
           pendingSaveKeyRef.current = null;
           if (manual) toast.success("Saved changes");
+          forceCreateRef.current = false;
           try {
             clearDraft(id);
             consumePostAuthId();
@@ -383,6 +385,7 @@ export default function SandboxEditor({
       if (marker === id) {
         // Force a save attempt
         lastSavedRef.current = "__force_post_auth_save__";
+        forceCreateRef.current = true;
         performSave({ manual: true });
       }
     } catch {}
