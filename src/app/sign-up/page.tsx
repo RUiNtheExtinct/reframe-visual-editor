@@ -5,9 +5,12 @@ import { motion } from "framer-motion";
 import { Github } from "lucide-react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 export default function SignUpPage() {
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams?.get("callbackUrl") || "/";
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [name, setName] = useState("");
@@ -27,7 +30,14 @@ export default function SignUpPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data?.message || "Sign up failed");
-      setMessage("Account created. You can now sign in.");
+      // Auto sign-in after successful sign-up
+      await signIn("credentials", {
+        emailOrUsername: email,
+        password,
+        redirect: true,
+        callbackUrl,
+      });
+      setMessage("Account created. Redirecting…");
     } catch (e: any) {
       setError(e?.message || "Sign up failed");
     }
@@ -98,14 +108,14 @@ export default function SignUpPage() {
           <div className="space-y-2">
             <Button
               className="w-full inline-flex items-center justify-center gap-2 bg-[#4285F4] text-white hover:opacity-95 dark:bg-[#4285F4]"
-              onClick={() => signIn("google", { callbackUrl: "/" })}
+              onClick={() => signIn("google", { callbackUrl })}
             >
               <GoogleIcon className="size-4" />
               Continue with Google
             </Button>
             <Button
               className="w-full inline-flex items-center justify-center gap-2 bg-black text-white hover:opacity-95 dark:bg-white dark:text-black"
-              onClick={() => signIn("github", { callbackUrl: "/" })}
+              onClick={() => signIn("github", { callbackUrl })}
             >
               <Github className="size-4" />
               Continue with GitHub

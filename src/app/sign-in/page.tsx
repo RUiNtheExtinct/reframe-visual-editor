@@ -5,9 +5,12 @@ import { motion } from "framer-motion";
 import { Github } from "lucide-react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 export default function SignInPage() {
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams?.get("callbackUrl") || "/";
   const [emailOrUsername, setEmailOrUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +22,7 @@ export default function SignInPage() {
       emailOrUsername,
       password,
       redirect: true,
-      callbackUrl: "/",
+      callbackUrl,
     });
     if (res?.error) setError(res.error);
   };
@@ -78,14 +81,14 @@ export default function SignInPage() {
           <div className="space-y-2">
             <Button
               className="w-full inline-flex items-center justify-center gap-2 bg-[#4285F4] text-white hover:opacity-95 dark:bg-[#4285F4]"
-              onClick={() => signIn("google", { callbackUrl: "/" })}
+              onClick={() => signIn("google", { callbackUrl })}
             >
               <GoogleIcon className="size-4" />
               Continue with Google
             </Button>
             <Button
               className="w-full inline-flex items-center justify-center gap-2 bg-black text-white hover:opacity-95 dark:bg-white dark:text-black"
-              onClick={() => signIn("github", { callbackUrl: "/" })}
+              onClick={() => signIn("github", { callbackUrl })}
             >
               <Github className="size-4" />
               Continue with GitHub

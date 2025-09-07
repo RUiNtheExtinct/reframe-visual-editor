@@ -18,6 +18,7 @@ import { updateUpdateComponentMutation } from "@/lib/api/component/component.hoo
 import { api } from "@/lib/api/component/component.service";
 import { parseJsxToTree } from "@/lib/serializer";
 import { useUserStore } from "@/stores";
+import { useDraftStore } from "@/stores/draft.store";
 import clsx from "clsx";
 import { Copy, Redo2, Trash2, Undo2 } from "lucide-react";
 import Link from "next/link";
@@ -59,6 +60,10 @@ export default function SandboxEditor({
 }: SandboxEditorProps) {
   const { user } = useUserStore();
   const router = useRouter();
+  const setDraft = useDraftStore((s) => s.setDraft);
+  const clearDraft = useDraftStore((s) => s.clearDraft);
+  const setPostAuthId = useDraftStore((s) => s.setPostAuthId);
+  const consumePostAuthId = useDraftStore((s) => s.consumePostAuthId);
 
   const [code, setCode] = useState<string>(() => initialSource || DEFAULT_SNIPPET);
   const [name, setName] = useState<string>(initialName || "");
@@ -93,6 +98,7 @@ export default function SandboxEditor({
   const [customPreviewWidth, setCustomPreviewWidth] = useState<number>(1280);
   const [customPreviewHeight, setCustomPreviewHeight] = useState<number>(800);
   const [isDesktop, setIsDesktop] = useState<boolean>(false);
+  const [showAuthPrompt, setShowAuthPrompt] = useState<boolean>(false);
 
   useEffect(() => {
     // Match Tailwind's xl breakpoint (min-width: 1280px)
@@ -265,6 +271,15 @@ export default function SandboxEditor({
     async (opts?: { manual?: boolean }) => {
       const { manual } = opts || {};
       const { sourceToSave, saveKey } = computeSaveState();
+      // If not authenticated, prompt and stash current work for post-auth
+      if (!user?.userId) {
+        try {
+          setDraft(id, { source: sourceToSave, name: name || "", description: description || "" });
+          setPostAuthId(id);
+        } catch {}
+        if (manual) setShowAuthPrompt(true);
+        return;
+      }
       if (saveKey === lastSavedRef.current) {
         if (manual) toast.info("No changes to save");
         return;
@@ -296,6 +311,10 @@ export default function SandboxEditor({
           lastSavedAtRef.current = Date.now();
           pendingSaveKeyRef.current = null;
           if (manual) toast.success("Saved changes");
+          try {
+            clearDraft(id);
+            consumePostAuthId();
+          } catch {}
           router.replace(`/preview/${component.componentId}`);
           return;
         }
@@ -355,6 +374,19 @@ export default function SandboxEditor({
 
   // Compile + evaluate to component
   const { Component, compileError } = useCompiledComponent(code, overridesRef, setErrorMsg);
+
+  // Trigger post-auth save for unsaved components when returning from auth
+  useEffect(() => {
+    try {
+      if (!user?.userId || !id.startsWith("unsaved-")) return;
+      const marker = consumePostAuthId();
+      if (marker === id) {
+        // Force a save attempt
+        lastSavedRef.current = "__force_post_auth_save__";
+        performSave({ manual: true });
+      }
+    } catch {}
+  }, [user?.userId, id, performSave]);
 
   // Keep overrides in sync with the current code. If the user removed the overrides comment,
   // this clears overridesRef so we don't re-inject it on the next autosave.
@@ -1291,6 +1323,48 @@ export default function SandboxEditor({
           )}
         </div>
       </section>
+      {showAuthPrompt && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-sm rounded-xl border bg-card p-5 shadow-lg">
+            <h2 className="text-lg font-semibold mb-1">Sign in to save</h2>
+            <p className="text-sm text-foreground/70 mb-4">
+              You need an account to save changes. Sign in or create one now.
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowAuthPrompt(false)}
+                className="cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const callbackUrl = typeof window !== "undefined" ? window.location.href : "/";
+                  router.push(`/sign-in?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+                }}
+                className="cursor-pointer"
+              >
+                Sign in
+              </Button>
+              <Button
+                onClick={() => {
+                  const callbackUrl = typeof window !== "undefined" ? window.location.href : "/";
+                  router.push(`/sign-up?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+                }}
+                className="cursor-pointer"
+              >
+                Create account
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,38 +2,15 @@
 
 import SandboxEditor from "@/components/SandboxEditor";
 import { DEFAULT_SNIPPET } from "@/components/sandbox/defaults";
-import { useEffect, useMemo, useState } from "react";
+import { useDraftById } from "@/stores/draft.store";
 
 export default function UnsavedPreviewClient({ id }: { id: string }) {
-  const storageKey = useMemo(() => `reframe:unsaved:${id}`, [id]);
-  const [loaded, setLoaded] = useState(false);
-  const [initial, setInitial] = useState<{
-    source?: string;
-    name?: string;
-    description?: string;
-  } | null>(null);
-
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(storageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setInitial({
-          source: parsed?.source || DEFAULT_SNIPPET,
-          name: parsed?.name || "Untitled",
-          description: parsed?.description || "",
-        });
-      } else {
-        setInitial({ source: DEFAULT_SNIPPET, name: "Untitled", description: "" });
-      }
-    } catch {
-      setInitial({ source: DEFAULT_SNIPPET, name: "Untitled", description: "" });
-    } finally {
-      setLoaded(true);
-    }
-  }, [storageKey]);
-
-  if (!loaded || !initial) return <div className="p-8">Loading preview…</div>;
+  const draft = useDraftById(id);
+  const initial = {
+    source: draft?.source || DEFAULT_SNIPPET,
+    name: draft?.name || "Untitled",
+    description: draft?.description || "",
+  };
 
   return (
     <div className="min-h-screen px-6 py-8 sm:px-12">
