@@ -1,7 +1,7 @@
+import { ComponentsClient } from "@/components/ComponentsClient";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { ComponentsClient } from "./ComponentsClient";
 
 export default async function ComponentsPage({
   searchParams,

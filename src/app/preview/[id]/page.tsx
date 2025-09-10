@@ -1,12 +1,15 @@
+import UnsavedPreviewClient from "@/components/sandbox/UnsavedPreviewClient";
 import SandboxEditor from "@/components/SandboxEditor";
 import { authOptions } from "@/lib/auth";
 import { serializeTreeToSource } from "@/lib/serializer";
 import { getComponent } from "@/lib/store";
 import type { ComponentTree } from "@/types/editor";
 import { getServerSession } from "next-auth";
-import UnsavedPreviewClient from "./UnsavedPreviewClient";
 
 async function getData(id: string, userId: string | undefined | null) {
+  if (id.startsWith("unsaved-")) {
+    return null;
+  }
   const comp = await getComponent(id, userId);
   if (!comp) return null;
   return {
@@ -32,7 +35,7 @@ export default async function PreviewPage({ params }: { params: { id: string } }
 
   const comp = await getData(id, userId);
 
-  if (!comp) {
+  if (!comp || id.startsWith("unsaved-")) {
     return <UnsavedPreviewClient id={id} />;
   }
 
