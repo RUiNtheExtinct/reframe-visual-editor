@@ -1,7 +1,13 @@
 import AnimatedGradient from "@/components/AnimatedGradient";
 import Navbar from "@/components/Navbar";
 import { Toaster } from "@/components/ui/sonner";
-import { AuthProvider, QueryProvider, ThemeProvider, UserSessionSync } from "@/providers";
+import {
+  AuthProvider,
+  QueryProvider,
+  ThemeProvider,
+  UserSessionSync,
+  ZustandDevtoolsProvider,
+} from "@/providers";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -32,6 +38,7 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             <QueryProvider>
+              <ZustandDevtoolsProvider />
               <UserSessionSync />
               <Navbar />
               <div className="relative">
