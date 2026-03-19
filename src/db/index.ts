@@ -7,7 +7,11 @@ export function getPool(): Pool | null {
   const url = process.env.DATABASE_URL;
   if (!url) return null;
   if (pool) return pool;
-  pool = new Pool({ connectionString: url, max: 5 });
+  pool = new Pool({
+    connectionString: url,
+    max: 5,
+    ssl: { rejectUnauthorized: false },
+  });
   return pool;
 }
 
